@@ -6,10 +6,6 @@
 *.lo
 *.o
 *.obj
-main
-local_complementation
-pivot
-server
 runTest*
 
 # Precompiled Headers
@@ -65,13 +61,9 @@ dist-ssr
 
 python_venv
 
-include/Eigen
-
 .cache
 
 build/
-
-
 
 # FRONTEND
 # Logs
@@ -87,6 +79,7 @@ node_modules
 dist
 dist-ssr
 *.local
+package-lock.json
 
 # Editor directories and files
 .vscode/*

@@ -9,8 +9,7 @@
 #include <string>
 #include <iostream>
 
-#include <json.hpp>
-
+#include <nlohmann/json.hpp>
 using json = nlohmann::json;
 
 enum class SpiderType { Z, X, INPUT, OUTPUT };

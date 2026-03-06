@@ -8,7 +8,7 @@
 #include <map>
 #include <algorithm>
 #include <cctype>
-#include <json.hpp>
+#include <nlohmann/json.hpp>
 using json = nlohmann::json;
 
 #include "Quantum_Circuit.hpp"

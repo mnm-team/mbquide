@@ -6,7 +6,7 @@
 #include <set>
 #include <algorithm>
 #include <iostream>
-#include <json.hpp>
+#include <nlohmann/json.hpp>
 using json = nlohmann::json;
 
 #include "MBQC_Graph.hpp"

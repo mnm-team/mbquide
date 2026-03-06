@@ -1,6 +1,6 @@
 #include "crow_all.h"
 
-#include <json.hpp>
+#include <nlohmann/json.hpp>
 using json = nlohmann::json;
 
 #include "MBQC_Graph.hpp"

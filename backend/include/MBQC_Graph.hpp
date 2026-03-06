@@ -13,7 +13,7 @@
 #include <sstream>
 #include <fstream>
 #include <set>
-#include <json.hpp>
+#include <nlohmann/json.hpp>
 #include <unordered_set>
 
 using json = nlohmann::json;

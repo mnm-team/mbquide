@@ -17,10 +17,12 @@ MBQuIDE/
 
 ### Backend
 #### Requirements:
-- **Crow**: https://crowcpp.org/
-- **libasio-dev**
-- **Eigen** – https://gitlab.com/libeigen/eigen/  
-  Copy the Eigen headers into the `backend/include/` directory.
+- **CMake ≥ 3.14**
+- C++ compiler: Must support **C++17**
+- Install **boost:**
+```bash
+apt install libboost-graph-dev
+```
 
 #### Build:
 
@@ -36,7 +38,7 @@ cmake --build backend/build
 
 ### Frontend
 #### Requirements:
-- Node.js + npm
+- Node.js ≥ 18 with npm ≥ 9
 
 Install dependencies:
 ```bash
@@ -47,26 +49,11 @@ npm install
 
 ## Running the application
 
-
-### Run the backend 
-from the project root:
-```
-./build/Server
-```
-The backend server will start on:
-```
-http://localhost:18080
-```
-
-### Run the Frontend:
+Backend and Frontend can be started with the script:
 ```bash
-cd frontend
-npm run dev
+bash start.sh
 ```
-The development server will start at:
-```
-http://localhost:5173/
-```
-and connect to the backend automatically.
+
+The backend server will start on port 18080 while the frontend server will run on port 5173.
 
 
