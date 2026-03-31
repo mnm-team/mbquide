@@ -27,7 +27,6 @@ export const useGraphValidation = (
   };
 
   const isZDeletable = (): boolean => {
-    if (selectedNodes.length !== 1) return false;
     if (containsOutput()) return false;
 
     return selectedNodes.every(

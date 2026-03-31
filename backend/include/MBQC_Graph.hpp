@@ -57,6 +57,7 @@ public:
     void pivot(int u, int v);
     void ZInsertion(const std::vector<int>& inputVertices);
     void ZDeletion(int u);
+    void ZDeletion(std::vector<int> nodes);
     void relabel(int u);
     void relabelPlanar(int u, MeasurementBasis preferredBasis);
     void relabelPlanar(int u);

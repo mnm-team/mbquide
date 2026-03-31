@@ -696,4 +696,125 @@ TEST_CASE("Test Entire Pipeline (Simulating QASM Circuit)") {
         CHECK(equalUpToGlobalPhase(output, "(0.707107)|01> + (-0.707107)|10>"));
     }
 
+    SUBCASE("CCX with Control 0 and 1, Target 2, Input |000>") {
+        const char* circuit = R"qasm(
+            OPENQASM 2.0;
+            qreg q[3];
+            ccx q[0],q[1],q[2];
+        )qasm";
+
+        const char* input = "(1)|000>";
+        auto output = simulateCircuit(circuit, input);
+        CHECK(equalUpToGlobalPhase(output, "(1)|000>"));
+    }
+
+    SUBCASE("CCX with Control 0 and 1, Target 2, Input |110>") {
+        const char* circuit = R"qasm(
+            OPENQASM 2.0;
+            qreg q[3];
+            ccx q[0],q[1],q[2];
+        )qasm";
+
+        const char* input = "(1)|110>";
+        auto output = simulateCircuit(circuit, input);
+        CHECK(equalUpToGlobalPhase(output, "(1)|111>"));
+    }
+
+    SUBCASE("CCX with Control 0 and 2, Target 1, Input |101>") {
+        const char* circuit = R"qasm(
+            OPENQASM 2.0;
+            qreg q[3];
+            ccx q[0],q[2],q[1];
+        )qasm";
+
+        const char* input = "(1)|101>";
+        auto output = simulateCircuit(circuit, input);
+        CHECK(equalUpToGlobalPhase(output, "(1)|111>"));
+    }
+
+    SUBCASE("CCX with Control 1 and 2, Target 0, Input |011>") {
+        const char* circuit = R"qasm(
+            OPENQASM 2.0;
+            qreg q[3];
+            ccx q[1],q[2],q[0];
+        )qasm";
+
+        const char* input = "(1)|011>";
+        auto output = simulateCircuit(circuit, input);
+        CHECK(equalUpToGlobalPhase(output, "(1)|111>"));
+    }
+
+    SUBCASE("CCX with No Trigger (All Zeros)") {
+        const char* circuit = R"qasm(
+            OPENQASM 2.0;
+            qreg q[3];
+            ccx q[0],q[1],q[2];
+        )qasm";
+
+        const char* input = "(1)|000>";
+        auto output = simulateCircuit(circuit, input);
+        CHECK(equalUpToGlobalPhase(output, "(1)|000>"));
+    }
+
+
+    SUBCASE("CCZ with Controls 0 and 1, Target 2, Input |000>") {
+        const char* circuit = R"qasm(
+            OPENQASM 2.0;
+            qreg q[3];
+            h q[2];       // Optional: if you want to see phase in X-basis
+            ccz q[0],q[1],q[2];
+        )qasm";
+
+        const char* input = "(1)|000>";
+        auto output = simulateCircuit(circuit, input);
+        CHECK(equalUpToGlobalPhase(output, "(1)|000>"));
+    }
+
+    SUBCASE("CCZ with Controls 0 and 1, Target 2, Input |110>") {
+        const char* circuit = R"qasm(
+            OPENQASM 2.0;
+            qreg q[3];
+            ccz q[0],q[1],q[2];
+        )qasm";
+
+        const char* input = "(1)|110>";
+        auto output = simulateCircuit(circuit, input);
+        CHECK(equalUpToGlobalPhase(output, "(-1)|110>"));  // phase flip
+    }
+
+    SUBCASE("CCZ with Controls 0 and 2, Target 1, Input |101>") {
+        const char* circuit = R"qasm(
+            OPENQASM 2.0;
+            qreg q[3];
+            ccz q[0],q[2],q[1];
+        )qasm";
+
+        const char* input = "(1)|101>";
+        auto output = simulateCircuit(circuit, input);
+        CHECK(equalUpToGlobalPhase(output, "(-1)|101>"));
+    }
+
+    SUBCASE("CCZ with Controls 1 and 2, Target 0, Input |011>") {
+        const char* circuit = R"qasm(
+            OPENQASM 2.0;
+            qreg q[3];
+            ccz q[1],q[2],q[0];
+        )qasm";
+
+        const char* input = "(1)|011>";
+        auto output = simulateCircuit(circuit, input);
+        CHECK(equalUpToGlobalPhase(output, "(-1)|011>"));
+    }
+
+    SUBCASE("CCZ with No Trigger (All Zeros)") {
+        const char* circuit = R"qasm(
+            OPENQASM 2.0;
+            qreg q[3];
+            ccz q[0],q[1],q[2];
+        )qasm";
+
+        const char* input = "(1)|000>";
+        auto output = simulateCircuit(circuit, input);
+        CHECK(equalUpToGlobalPhase(output, "(1)|000>"));
+    }
 }

@@ -61,7 +61,7 @@ Converts the current MBQC graph into a ZX graph and returns its JSON representat
 | `"lc"` | `node: int` | Local complementation on a node |
 | `"pivot"` | `u: int`, `v: int` | Pivot on edge (u, v) |
 | `"z-insert"` | `ids: int[]` | Z insertion on a list of nodes |
-| `"z-delete"` | `node: int` | Z deletion on a node |
+| `"z-delete"` | `ids: int[]` | Z deletion on a list of nodes |
 | `"relabel"` | `node: int` | Relabel a node |
 | `"relabel-planar"` | `node: int`, `pref-basis?: string` | Planar relabelling, with optional preferred measurement basis |
 

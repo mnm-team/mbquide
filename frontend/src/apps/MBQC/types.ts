@@ -42,7 +42,7 @@ export type GraphApiResponse = {
 
 export type UpdateGraphOptions = {
   pos?: [number, number];
-  deleted_index?: number;
+  deleted_indices?: number[];
 };
 
 export type GraphState = {

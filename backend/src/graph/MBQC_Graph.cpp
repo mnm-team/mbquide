@@ -448,6 +448,14 @@ void MBQC_Graph::ZDeletion(int u) {
     size--;
 }
 
+void MBQC_Graph::ZDeletion(std::vector<int> nodes) {
+    // Sort descending so that earlier deletions don't invalidate later indices
+    std::sort(nodes.begin(), nodes.end(), std::greater<int>());
+
+    for (int u : nodes) {
+        ZDeletion(u);
+    }
+}
 
 void MBQC_Graph::relabel(int u) {
     if (u < 0 || u >= size) {

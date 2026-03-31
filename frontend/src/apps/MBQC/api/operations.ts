@@ -14,9 +14,9 @@ export const createZInsertionOperation = (nodeIds: number[]) => ({
   ids: nodeIds,
 });
 
-export const createZDeletionOperation = (nodeId: number) => ({
+export const createZDeletionOperation = (nodeIds: number[]) => ({
   operation: "z-delete",
-  node: nodeId,
+  ids: nodeIds,
 });
 
 export const createRelabelingOperation = (nodeId: number) => ({

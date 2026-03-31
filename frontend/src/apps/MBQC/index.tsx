@@ -168,11 +168,10 @@ export default function MBQC_App() {
   };
 
   const handleZDeletion = () => {
-    if (selectedNodes.length !== 1) return;
-    const nodeID = selectedNodes[0].id;
+    const nodeIDs = selectedNodes.map(n => n.id);
     runGraphOperation(
-      createZDeletionOperation(nodeID),
-      { deleted_index: nodeID }
+      createZDeletionOperation(nodeIDs),
+      { deleted_indices: nodeIDs }
     );
   };
 

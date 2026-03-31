@@ -31,13 +31,19 @@ export const transformNodesForUpdate = (
   existingNodes: NodeType[],
   options: UpdateGraphOptions = {}
 ): NodeType[] => {
-  const { pos, deleted_index } = options;
-  
+  const { pos, deleted_indices } = options;
+
+  // Sort ascending so shifts accumulate correctly bottom-up
+  const sortedDeleted = deleted_indices
+    ? [...deleted_indices].sort((a, b) => a - b)
+    : [];
+
   return (data.meas as [string, string][]).map(([basis, phase], index) => {
     // If deleted_index is defined and this index is >= it, shift by +1
-    const oldIndex = (deleted_index !== undefined && index >= deleted_index) 
-      ? index + 1 
-      : index;
+    const oldIndex = sortedDeleted.reduce(
+      (originalIndex, deletedIdx) => (originalIndex >= deletedIdx ? originalIndex + 1 : originalIndex),
+      index
+    );
 
     return {
       id: index,

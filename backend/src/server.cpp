@@ -186,8 +186,8 @@ int main() {
                     std::vector<int> ids = body["ids"];
                     graph.ZInsertion(ids);
                 } else if (op == "z-delete") {
-                    int u = body["node"];
-                    graph.ZDeletion(u);
+                    std::vector<int> ids = body["ids"];
+                    graph.ZDeletion(ids);
                 } else if (op == "relabel") {
                     int u = body["node"];
                     graph.relabel(u);
