@@ -189,7 +189,6 @@ ZXGraph ZXGraph::fromQuantumCircuit(const QuantumCircuit& qc) {
             zx.addEdge(wire_end[gate.qubits[1]], z2); wire_end[gate.qubits[1]] = z2;
 
         } else if (op == "ccz" || op == "ccx") {
-            if (op == "ccz") qc.printCircuit();
             int c1 = gate.qubits[0], c2 = gate.qubits[1], t = gate.qubits[2];
 
             int zc1 = appendSpider(c1, SpiderType::Z, M_PI/4);
