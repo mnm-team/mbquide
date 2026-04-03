@@ -28,12 +28,11 @@ export const useGraphValidation = (
   };
 
   const isZDeletable = (): boolean => {
-    if (containsOutput()) return false;
-
     return areNodesZDeletable(selectedNodes);
   };
-
+  
   const areNodesZDeletable = (ns: NodeType[]): boolean => {
+    if (ns.length === 0) return false;
     if (containsOutput()) return false;
 
     return ns.every(
