@@ -198,8 +198,8 @@ private:
             const bool noDeps = xDeps.empty() && zDeps.empty();
 
             const bool selfOnlyDeps =
-                xDeps.size() == 1 && xDeps.count(node) &&
-                zDeps.size() == 1 && zDeps.count(node);
+                ((xDeps.size() == 1 && xDeps.count(node)) || xDeps.empty()) &&
+                ((zDeps.size() == 1 && zDeps.count(node)) || zDeps.empty());
 
             const bool zCorrIrrel =
                 xDeps.empty() && correctionHasNoImpact(node, 'Z');
