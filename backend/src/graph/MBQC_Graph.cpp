@@ -176,6 +176,26 @@ void MBQC_Graph::printGraph() const {
 }
 
 
+// Encodes the full graph state into a compact string.
+// Captures: size, adjacency, measurement bases+angles, and output adjustments.
+std::string MBQC_Graph::stateHash() const {
+    std::ostringstream oss;
+    oss << size << "|";
+    for (int i = 0; i < size; ++i)
+        for (int j = i + 1; j < size; ++j)
+            if (adjacencyMatrix[i][j])
+                oss << i << "-" << j << ",";
+    oss << "|";
+    for (const auto& [node, data] : measurements)
+        oss << node << ":" << static_cast<int>(data.first)
+            << ":" << std::fixed << std::setprecision(6) << data.second << ";";
+    oss << "|";
+    for (const auto& [node, oa] : outputAdjustments)
+        oss << node << ":" << oa.toString() << ";";
+    return oss.str();
+}
+
+
 MBQC_Graph MBQC_Graph::clone() const {
     MBQC_Graph copy;
 
@@ -582,7 +602,200 @@ void MBQC_Graph::relabelPlanar(int u) {
     }
 }
 
+// Merges two YZ nodes by summing their phases (https://doi.org/10.1103/PhysRevA.102.022406.)
+void MBQC_Graph::mergeYZ(int u, int v) {
+ 
+    if (u < 0 || u >= size || v < 0 || v >= size) {
+        std::cerr << "mergeYZNodes: node out of range\n";
+    }
+    if (isOutput(u) || isOutput(v)) {
+        std::cerr << "mergeYZNodes: cannot merge output nodes\n";
+    }
+ 
+    auto [basis_u, angle_u] = getMeasurement(u);
+    auto [basis_v, angle_v] = getMeasurement(v);
+ 
+    if (basis_u != MeasurementBasis::YZ || basis_v != MeasurementBasis::YZ) {
+        std::cerr << "mergeYZNodes: both nodes must be in YZ basis\n";
+    }
+    if (adjacencyMatrix[u][v]) {
+        std::cerr << "mergeYZNodes: nodes " << u << " and " << v << " are neighbors, cannot merge\n";
+    }
+ 
+    std::vector<int> neighbors_u = getNeighbors(u);
+    std::vector<int> neighbors_v = getNeighbors(v);
+ 
+    std::set<int> set_u(neighbors_u.begin(), neighbors_u.end());
+    std::set<int> set_v(neighbors_v.begin(), neighbors_v.end());
+ 
+    if (set_u != set_v) {
+        std::cerr << "mergeYZNodes: nodes " << u << " and " << v << " do not share the same neighbors\n";
+    }
+ 
+    // Merge: keep u, delete v
+    double mergedAngle = normalize_radians(angle_u + angle_v);
+    measurements[u] = {MeasurementBasis::YZ, mergedAngle};
+ 
+    // Delete v (use single-node ZDeletion-style removal)
+    adjacencyMatrix.erase(adjacencyMatrix.begin() + v);
+    for (auto& row : adjacencyMatrix) {
+        row.erase(row.begin() + v);
+    }
+    measurements.erase(v);
+    std::map<int, std::pair<MeasurementBasis, double>> newMeasurements;
+    for (const auto& [node, data] : measurements) {
+        newMeasurements[node > v ? node - 1 : node] = data;
+    }
+    measurements = std::move(newMeasurements);
+    std::map<int, OutputAdjustmentMap> newOutputAdjustments;
+    for (const auto& [node, oa] : outputAdjustments) {
+        newOutputAdjustments[node > v ? node - 1 : node] = oa;
+    }
+    outputAdjustments = std::move(newOutputAdjustments);
+    for (auto& x : inputs)  if (x > v) --x;
+    for (auto& x : outputs) if (x > v) --x;
+    // If u was above v in index, its index shifted down by 1
+    if (u > v) --u;
+    size--;
+}
 
+
+// ########## AUTOMATIC SIMPLIFICATION ##############
+
+void MBQC_Graph::simplify(int maxIterations) {
+ 
+    std::unordered_set<std::string> seenStates;
+    int iterations = 0;
+ 
+    while (true) {
+ 
+        // Break condition 1: max iterations
+        if (iterations >= maxIterations) {
+            std::cerr << "simplify(): reached max iterations (" << maxIterations << "), stopping.\n";
+            break;
+        }
+ 
+        // Break condition 2: repetition detection via state hash
+        std::string hash = stateHash();
+        if (seenStates.count(hash)) {
+            break;
+        }
+        seenStates.insert(hash);
+        ++iterations;
+ 
+        // Relabel all eligible nodes to Pauli basis 
+        for (const auto& [node, data] : measurements) {
+            MeasurementBasis basis = data.first;
+            double angle = normalize_radians(data.second);
+ 
+            bool isPlanar = (basis == MeasurementBasis::XY ||
+                             basis == MeasurementBasis::XZ ||
+                             basis == MeasurementBasis::YZ);
+            bool isQuarterAngle = fAlmostEqual(fmod(angle, M_PI / 2), 0);
+ 
+            if (isPlanar && isQuarterAngle && !isOutput(node)) {
+                relabel(node);
+            }
+        }
+ 
+        // Local complementation on all Y nodes
+        std::vector<int> yNodes;
+        for (const auto& [node, data] : measurements) {
+            if (data.first == MeasurementBasis::Y && !isOutput(node) && !isInput(node))
+                yNodes.push_back(node);
+        }
+        for (int node : yNodes) {
+            // Re-check: LC on a Y node may have changed a neighbour's basis
+            if (measurements.count(node) && measurements.at(node).first == MeasurementBasis::Y) {
+                localComplementation(node);
+            }
+        }
+ 
+        // Pivot on all X nodes that have a non-input neighbor
+        std::vector<int> xNodes;
+        for (const auto& [node, data] : measurements) {
+            if (data.first == MeasurementBasis::X && !isInput(node))
+                xNodes.push_back(node);
+        }
+        for (int node : xNodes) {
+            if (measurements.at(node).first != MeasurementBasis::X) continue; // may have been removed by earlier pivot
+ 
+            int pivotNeighbor = -1;
+            for (int nb : getNeighbors(node)) {
+                if (!isInput(nb)) { pivotNeighbor = nb; break; }
+            }
+ 
+            if (pivotNeighbor != -1) {
+                pivot(node, pivotNeighbor);
+            }
+        }
+ 
+        // ZDeletion on all eligible Z nodes
+        std::vector<int> zCandidates;
+        for (const auto& [node, data] : measurements) {
+            MeasurementBasis basis = data.first;
+            double angle = normalize_radians(data.second);
+ 
+            bool isZBasis = (basis == MeasurementBasis::Z ||
+                             basis == MeasurementBasis::XZ ||
+                             basis == MeasurementBasis::YZ);
+            bool isValidAngle = fAlmostEqual(angle, 0) || fAlmostEqual(angle, M_PI);
+ 
+            if (isZBasis && isValidAngle && !isOutput(node)) {
+                zCandidates.push_back(node);
+            }
+        }
+        if (!zCandidates.empty()) {
+            ZDeletion(zCandidates);
+        }
+
+        // YZ node merger
+        mergeAllYZNodes();
+ 
+    }
+}
+
+
+// Scans all pairs of YZ nodes and merges any eligible pair.
+// Returns true if at least one merge was performed.
+bool MBQC_Graph::mergeAllYZNodes() {
+    bool anyMerged = false;
+ 
+    bool merged = true;
+    while (merged) {
+        merged = false;
+ 
+        // Collect current YZ non-output nodes
+        std::vector<int> yzNodes;
+        for (const auto& [node, data] : measurements) {
+            if (data.first == MeasurementBasis::YZ && !isOutput(node))
+                yzNodes.push_back(node);
+        }
+ 
+        // Try all pairs
+        for (size_t i = 0; i < yzNodes.size() && !merged; ++i) {
+            for (size_t j = i + 1; j < yzNodes.size() && !merged; ++j) {
+                int a = yzNodes[i];
+                int b = yzNodes[j];
+ 
+                if (adjacencyMatrix[a][b]) continue;
+ 
+                std::vector<int> na = getNeighbors(a);
+                std::vector<int> nb = getNeighbors(b);
+                std::set<int> sa(na.begin(), na.end());
+                std::set<int> sb(nb.begin(), nb.end());
+ 
+                if (sa == sb) {
+                    mergeYZ(a, b);
+                    merged = true;
+                    anyMerged = true;
+                }
+            }
+        }
+    }
+ 
+    return anyMerged;
+}
 
 
 // ########## FLOW ##############

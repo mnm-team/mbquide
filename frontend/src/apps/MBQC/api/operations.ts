@@ -52,6 +52,10 @@ export const createTransformToZXOperation = () => ({
   transform: true,
 });
 
+export const createSimplifyOperation = () => ({
+  simplify: true,
+});
+
 export const createSimulateOperation = (input: string = "") => ({
   simulate: true,
   random: true,

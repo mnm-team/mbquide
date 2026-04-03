@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate } from "react-router-dom";
 
 import { ActionButton } from './Buttons';
-import { CodeIcon, MBQCIcon, MeasurementIcon, ZXIcon, actionIcon, undoIcon, redoIcon, flowIcon, focusIcon, resetIcon, RunAllIcon } from './Icons';
+import { CodeIcon, MBQCIcon, MeasurementIcon, ZXIcon, actionIcon, undoIcon, redoIcon, flowIcon, focusIcon, resetIcon, RunAllIcon, simplificationIcon } from './Icons';
 
 type ControlPanelProps = {
   selectedCount?: number;
@@ -10,8 +10,10 @@ type ControlPanelProps = {
   canRedo?: boolean;
   onUndo?: () => void;
   onRedo?: () => void;
+  onSimplifyGraph?: () => void;
   onResetGraph?: () => void;
   onResetSim?: () => void;
+  simplifyGraphDisabled?: boolean;
   resetGraphDisabled?: boolean;
   flowFocusable?: boolean;
   simulatable?: boolean;
@@ -61,8 +63,10 @@ export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
     onRelabelingPlanar,
     onUndo,
     onRedo,
+    onSimplifyGraph,
     onResetGraph,
     onResetSim,
+    simplifyGraphDisabled,
     resetGraphDisabled,
     onTransformToZX,
     onTransformToMBQC,
@@ -80,6 +84,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
 
   const operationButtons = [
     { onClick: onPrintNodes, disabled: selectedCount === 0, label: 'Print', show: !!onPrintNodes },
+    { onClick: onSimplifyGraph, disabled: simplifyGraphDisabled, label: simplificationIcon + ' Simplify', sublabel: 'Automatically simplify the Graph', show: !!onSimplifyGraph },
     { onClick: onResetGraph, disabled: resetGraphDisabled, label: resetIcon + ' Reset', sublabel: 'Reset to empty Graph', show: !!onResetGraph },
     { onClick: onResetSim, disabled: !canResetSim, label: resetIcon + ' Reset', sublabel: 'Reset Simulator', show: !!onResetSim },
     { onClick: onLocalComplementation, disabled: !isLCable, label: actionIcon + ' LC', sublabel: 'Local Complementation', show: !!onLocalComplementation },

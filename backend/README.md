@@ -65,6 +65,12 @@ Converts the current MBQC graph into a ZX graph and returns its JSON representat
 | `"relabel"` | `node: int` | Relabel a node |
 | `"relabel-planar"` | `node: int`, `pref-basis?: string` | Planar relabelling, with optional preferred measurement basis |
 
+#### Automatically simplify the graph
+```json
+{ "simplify": true }
+```
+Iteratively applies graph rewrites to minimize the graph.
+
 #### Compute focused Pauli flow
 ```json
 { "flow": "pauli" }

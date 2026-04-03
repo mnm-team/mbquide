@@ -21,6 +21,7 @@ import {
   createFocusFlowOperation,
   createTransformToZXOperation,
   createSimulateOperation,
+  createSimplifyOperation,
 } from './api/operations';
 
 export default function MBQC_App() {
@@ -88,9 +89,10 @@ export default function MBQC_App() {
     isLCable,
     isPivotable,
     isZDeletable,
+    canSimplify,
     fitForRelabeling,
     areNonPlanar,
-  } = useGraphValidation(selectedNodes, edges, inputs, outputs);
+  } = useGraphValidation(nodes, selectedNodes, edges, inputs, outputs);
 
   // Polling for initial load
   useEffect(() => {
@@ -396,6 +398,13 @@ export default function MBQC_App() {
     fetchGraph();
   }
 
+  const handleSimplifyGraph = async () => {
+    await runGraphOperation(
+      createSimplifyOperation(),
+    );
+    fetchGraph();
+  }
+
   return (
     <div style={{ textAlign: 'center', padding: '20px' }}>
       <LoadingOverlay isLoading={loading} />
@@ -435,6 +444,7 @@ export default function MBQC_App() {
 
         {...(!buildingMode && {
           // onPrintNodes: handlePrintNodes,
+          onSimplifyGraph: handleSimplifyGraph,
           onLocalComplementation: handleLocalComplementation,
           onPivot: handlePivot,
           onZInsertion: handleZInsertion,
@@ -446,6 +456,7 @@ export default function MBQC_App() {
           isZDeletable: isZDeletable(),
           fitForRelabeling: fitForRelabeling(),
           areNonPlanar: areNonPlanar(),
+          simplifyGraphDisabled: !canSimplify(),
           onTransformToZX: handleTransformToZX,
           onGetFlow: handleGetFlow,
           onFocusFlow: handleFocusFlow,

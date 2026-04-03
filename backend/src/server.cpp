@@ -203,6 +203,10 @@ int main() {
 
                 j = graph.toJson();
 
+            } else if (body.contains("simplify")) {
+                graph.simplify();
+                j = graph.toJson();
+
             } else if (body.contains("flow")) {
                 std::string flow = body["flow"];
                 PauliFlowResult& pauliFlow = get_flow_for_session(session.id);

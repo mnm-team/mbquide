@@ -40,6 +40,7 @@ Users can simplify or restructure the pattern using rewriting rules.
 | 💥 **Pivot** | Use the brush tool to select two adjacent vertices, then apply a **Pivot** to the edge between them. |
 | 💥 **Z-Insert** | Insert a **Z vertex** connected to all currently selected vertices. |
 | 💥 **Z-Delete** | Remove a **Z**, **XZ**, or **YZ** vertex. |
+| 🧙‍♂️ **Simplify** | Automatically applying multiple rewriting rules to simplify the graph. |
 
 ### Pauli Flow Visualization 🌊
 
