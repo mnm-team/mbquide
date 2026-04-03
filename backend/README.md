@@ -89,9 +89,9 @@ Computes the Pauli flow for the current graph. Returns the graph JSON extended w
 
 #### Initialise a simulation
 ```json
-{ "simulate": true, "random": true, "input": "(0.707107)|00> + (0.707107)|11>" }
+{ "simulate": true, "random": true, "input": "(0.707107)|00> + (0.707107)|11>", "maxVecSize(Optional)": 128 }
 ```
-Initialises the simulator using the current graph and flow. Requires a valid Pauli flow to exist.
+Initialises the simulator using the current graph and flow. Requires a valid Pauli flow to exist. `maxVecSize` sets the maximum size of the vector that can be returned in the response JSON object.
 
 ---
 
@@ -137,9 +137,11 @@ Controls the simulator.
 
 #### Initialise
 ```json
-{ "init": true, "random": false, "input": "|0>" }
+{ "init": true, "random": false, "input": "|0>", "maxVecSize(Optional)": 128 }
 ```
 Initialises the simulator from the current graph and flow. Set `"random": true` to use random measurement outcomes.
+`maxVecSize` sets the maximum size of the vector that can be returned in the response JSON object.
+
 
 #### Measure a single node
 ```json

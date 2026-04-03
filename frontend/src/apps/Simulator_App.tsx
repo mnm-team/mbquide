@@ -280,9 +280,9 @@ const SimulatorApp: React.FC = () => {
       </div>
 
       {/* Right column: Statevector */}
-      {data && data.statevector && (
+      {data && (
         <div className="w-100 h-screen overflow-auto z-100">
-          <Statevector statevector={data.statevector} ids={activeNodes} />
+          <Statevector statevector={data.statevector || []} ids={activeNodes} />
         </div>
       )}
     </div>

@@ -232,7 +232,12 @@ int main() {
                 bool random = body["random"];
                 std::string inputState = body["input"];
                 if (flow.ok) {
-                    simulator = Simulator(graph, flow, random, inputState);
+                    if (body.contains("maxVecSize")) {
+                        int maxVecSize = body["maxVecSize"];
+                        simulator = Simulator(graph, flow, random, inputState, maxVecSize);
+                    } else {
+                        simulator = Simulator(graph, flow, random, inputState);
+                    }
                 }
 
             }
@@ -347,7 +352,12 @@ int main() {
                 PauliFlowResult& flow = get_flow_for_session(session.id);
                 if (flow.ok) {
                     MBQC_Graph& graph = get_graph_for_session(session.id);
-                    simulator = Simulator(graph, flow, random, inputState);
+                    if (body.contains("maxVecSize")) {
+                        int maxVecSize = body["maxVecSize"];
+                        simulator = Simulator(graph, flow, random, inputState, maxVecSize);
+                    } else {
+                        simulator = Simulator(graph, flow, random, inputState);
+                    }
                 }
 
                 j = simulator.toJson();

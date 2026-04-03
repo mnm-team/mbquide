@@ -23,6 +23,7 @@ private:
     bool randomMeasurements;
     int totalNodes;
     int numInputNodes;
+    int maxVecSizeJSON;
     std::string inputStateString;
     StatevectorSimulator statevectorSimulator;
 
@@ -220,8 +221,8 @@ private:
     
 public:
     Simulator() = default;
-    Simulator(const MBQC_Graph& g, const PauliFlowResult& flow, bool random = true, std::string inputState = "")
-        : graph(g.clone()), flow(flow), randomMeasurements(random), inputStateString(inputState)
+    Simulator(const MBQC_Graph& g, const PauliFlowResult& flow, bool random = true, std::string inputState = "", int maxVecSizeJSON = 128)
+        : graph(g.clone()), flow(flow), randomMeasurements(random), inputStateString(inputState), maxVecSizeJSON(maxVecSizeJSON)
     {
         if (!flow.ok) {
             std::cerr << "Cannot create simulator from bad pauli flow!\n";
@@ -278,7 +279,11 @@ public:
         j["readyToMeasure"] = readyToMeasure;
         j["measured"] = measured;
         j["outcomes"] = measurementOutcomes;
-        j["statevector"] = statevectorSimulator.toJson();
+        if (1 << statevectorSimulator.get_num_qubits() > maxVecSizeJSON) {
+            j["statevector"] = {};
+        } else {
+            j["statevector"] = statevectorSimulator.toJson();
+        }
         j["activeEdges"] = activeEdges;
         
         // The reverse of qubitToGraph has already the right order of statevecotr

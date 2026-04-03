@@ -44,42 +44,50 @@ const Statevector: React.FC<StatevectorComponentProps> = ({ statevector, ids }) 
       </div>
       <span className="text-xs font-semibold text-gray-600 w-80 mb-2">&nbsp;{ ids?.join(" ") } &emsp;← Vertex IDs </span>
       <div className="space-y-2 overflow-y-auto flex-1 pr-2">
-        {vectors.map((vector, idx) => {
-          const { probability, phase } = getStateInfo(vector);
-          const barColor = phaseToColor(phase);
-          
-          // Skip states with zero probability if filter is enabled
-          if (showOnlyNonZero && probability.toFixed(2) === "0.00") return null;
-          
-          return (
-            <div key={idx} className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-gray-600 w-100">|{idx.toString(2).padStart(Math.log2(vectors.length), '0').split('').join(' ')}⟩:</span>
-              
-              {/* Probability bar with phase-based color */}
-              <div className="flex items-center gap-2">
-                <div className="w-32 h-5 bg-gray-200 rounded-full overflow-hidden relative">
-                  <div
-                    className="h-full transition-all duration-300 rounded-full"
-                    style={{
-                      width: `${probability * 100}%`,
-                      backgroundColor: barColor
-                    }}
-                  />
-                  <span className="absolute inset-0 flex items-center justify-center text-xs font-semibold text-gray-700 whitespace-nowrap">
-                    P = {probability.toFixed(2)}
+        {vectors.length === 0 ? (
+          <div className="text-gray-500 font-semibold text-center py-4 text-sm">
+            {ids && ids.length > 0 ? "Statevector exceeds display limit." : "No statevector!"}
+          </div>
+        ) : (
+          vectors.map((vector, idx) => {
+            const { probability, phase } = getStateInfo(vector);
+            const barColor = phaseToColor(phase);
+
+            // Skip states with zero probability if filter is enabled
+            if (showOnlyNonZero && probability.toFixed(2) === "0.00") return null;
+
+            return (
+              <div key={idx} className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-gray-600 w-100">
+                  |{idx.toString(2).padStart(Math.log2(vectors.length), '0').split('').join(' ')}⟩:
+                </span>
+
+                {/* Probability bar with phase-based color */}
+                <div className="flex items-center gap-2">
+                  <div className="w-32 h-5 bg-gray-200 rounded-full overflow-hidden relative">
+                    <div
+                      className="h-full transition-all duration-300 rounded-full"
+                      style={{
+                        width: `${probability * 100}%`,
+                        backgroundColor: barColor
+                      }}
+                    />
+                    <span className="absolute inset-0 flex items-center justify-center text-xs font-semibold text-gray-700 whitespace-nowrap">
+                      P = {probability.toFixed(2)}
+                    </span>
+                  </div>
+                  <span className="text-xs text-gray-400 w-10">
+                    φ: {phase.toFixed(0)}°
                   </span>
                 </div>
-                <span className="text-xs text-gray-400 w-10">
-                  φ: {phase.toFixed(0)}°
+
+                <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded font-mono text-xs whitespace-nowrap w-25">
+                  {vector[0].toFixed(2)} + {vector[1].toFixed(2)}i
                 </span>
               </div>
-              
-              <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded font-mono text-xs whitespace-nowrap w-25">
-                {vector[0].toFixed(2)} + {vector[1].toFixed(2)}i
-              </span>
-            </div>
-          );
-        })}
+            );
+          })
+        )}
       </div>
       
       {/* Phase color legend */}
