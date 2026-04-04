@@ -6,8 +6,11 @@ export const createBrushBehavior = (
   height: number,
   nodes: NodeType[],
   setSelectedNodes: (nodes: NodeType[]) => void,
-  onSelectionChange?: (selected: NodeType[]) => void
+  onSelectionChange?: (selected: NodeType[]) => void,
+  getPanOffset?: () => { x: number; y: number },  // ← add this
 ) => {
+  const getOffset = getPanOffset ?? (() => ({ x: 0, y: 0 }));
+
   return d3.brush()
     .extent([[0, 0], [width, height]])
     .on("start", () => {
@@ -16,8 +19,10 @@ export const createBrushBehavior = (
     .on("brush", (event) => {
       if (!event.selection) return;
       const [[x0, y0], [x1, y1]] = event.selection;
-      const selected = nodes.filter(
-        (d) => x0 <= d.x! && d.x! < x1 && y0 <= d.y! && d.y! < y1
+      const { x: px, y: py } = getOffset();
+      const selected = nodes.filter((d) =>
+        x0 <= d.x! + px && d.x! + px < x1 &&
+        y0 <= d.y! + py && d.y! + py < y1
       );
       setSelectedNodes(selected);
     })
@@ -26,10 +31,12 @@ export const createBrushBehavior = (
       const brushLayer = d3.select(event.sourceEvent.target.parentNode);
       brushLayer.call(d3.brush().move as any, null);
       const [[x0, y0], [x1, y1]] = event.selection;
-      const selected = nodes.filter(
-        (d) => x0 <= d.x! && d.x! < x1 && y0 <= d.y! && d.y! < y1
+      const { x: px, y: py } = getOffset();
+      const selected = nodes.filter((d) =>
+        x0 <= d.x! + px && d.x! + px < x1 &&
+        y0 <= d.y! + py && d.y! + py < y1
       );
       setSelectedNodes(selected);
-      if (onSelectionChange) onSelectionChange(selected);  // Setting selected nodes for the outside app
+      if (onSelectionChange) onSelectionChange(selected);
     });
 };

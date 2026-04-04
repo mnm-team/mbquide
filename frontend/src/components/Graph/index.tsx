@@ -7,6 +7,7 @@ import { ContextMenu } from './ui/ContextMenu';
 import { OutputTable } from './ui/OutputTable';
 import { PhaseInputModal } from './ui/phaseInputMode';
 import { BACKGROUND_COLOR } from './utils/colors';
+import { useSvgPan } from './hooks/useSvgPan';
 
 export function MBQC_Graph({
   nodes: mainNodes,
@@ -47,7 +48,7 @@ export function MBQC_Graph({
     setPhaseModalNode(null);
   };
 
-  const { svgRef } = useGraphSimulation({
+  const { svgRef, panGroupRef, setPanOffset } = useGraphSimulation({
     mainNodes,
     edges,
     inputs,
@@ -66,10 +67,48 @@ export function MBQC_Graph({
     onNodeDoubleClick: handleNodeDoubleClick,
   });
 
+  const { translate, onPointerDown, onPointerMove, onPointerUp } = useSvgPan(svgRef);
+
+
+  // Sync translate
+  useEffect(() => {
+    if (!panGroupRef.current) return;
+    panGroupRef.current.setAttribute(
+      'transform',
+      `translate(${translate.x}, ${translate.y})`
+    );
+    setPanOffset(translate);
+  }, [translate]);
+
   // Keep ref in sync with state
   useEffect(() => {
     selectedNodesRef.current = selectedNodes;
   }, [selectedNodes]);
+
+  useEffect(() => {
+    const svgEl = svgRef.current;
+    if (!svgEl) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Control') {
+        svgEl.style.cursor = 'grab';
+      }
+    };
+
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Control') {
+        svgEl.style.cursor = 'default';
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+    };
+  }, [svgRef]);
 
   // Context menu handlers
   const handleLocalComplementation = () => {
@@ -99,6 +138,10 @@ export function MBQC_Graph({
         height="auto"
         preserveAspectRatio="xMidYMid meet"
         style={{ backgroundColor: BACKGROUND_COLOR }}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerLeave={onPointerUp}
       />
      
       {/* Output Tables */}

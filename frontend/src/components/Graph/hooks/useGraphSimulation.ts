@@ -57,6 +57,12 @@ export const useGraphSimulation = ({
 }: UseGraphSimulationProps) => {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const nodeGroupRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null);
+  const panGroupRef = useRef<SVGGElement | null>(null);
+
+  const panOffsetRef = useRef({ x: 0, y: 0 });
+  const setPanOffset = (offset: { x: number; y: number }) => {
+    panOffsetRef.current = offset;
+  };
 
   // Update node glow effects based on selection
   useEffect(() => {
@@ -98,12 +104,16 @@ export const useGraphSimulation = ({
     const svg = d3.select(svgRef.current);
     svg.selectAll('*').remove();
 
+    const panGroup = svg.append("g").attr("class", "pan-layer");
+    panGroupRef.current = panGroup.node();
+    panGroup.attr('transform', `translate(${panOffsetRef.current.x}, ${panOffsetRef.current.y})`);
+
     svg.on("contextmenu", event => event.preventDefault());  // Prevent right click on svg
 
     const { WIDTH, HEIGHT } = SVG_DIMENSIONS;
 
     // Setup filters
-    const defs = svg.append('defs');
+    const defs = panGroup.append('defs');
     setupAllFilters(defs);
 
     // Prepare data
@@ -120,11 +130,11 @@ export const useGraphSimulation = ({
       .force("link", d3.forceLink(simEdges).id((d: any) => d.id));
 
     // Render edges
-    const link = renderEdges(svg, simEdges);
+    const link = renderEdges(panGroup, simEdges);
 
     // Render main nodes
-    const brushLayer = svg.append("g").attr("class", "brush");
-    const nodeGroup = svg.append("g").attr("stroke", "#fff");
+    const brushLayer = svg.insert("g", ":first-child").attr("class", "brush");
+    const nodeGroup = panGroup.append("g").attr("stroke", "#fff");
     nodeGroupRef.current = nodeGroup;
 
     const node = nodeGroup
@@ -147,8 +157,8 @@ export const useGraphSimulation = ({
     renderNodeShapes(node, inputs, outputs, classicZXcolors ? getFillColorZX : getFillColor );
 
     // Render labels
-    const labelsT = renderBasisLabels(svg, nodes, classicZXcolors ? getLabelColorZX : getLabelColor);
-    const labelsPhase = renderPhaseLabels(svg, nodes);
+    const labelsT = renderBasisLabels(panGroup, nodes, classicZXcolors ? getLabelColorZX : getLabelColor);
+    const labelsPhase = renderPhaseLabels(panGroup, nodes);
 
     // Render example nodes
     const exampleNodes = createExampleNodes();
@@ -163,7 +173,7 @@ export const useGraphSimulation = ({
       
     if (buildingMode) {
       example
-        .call(createExampleDragBehavior(svg, example, onNodeDrop))
+        .call(createExampleDragBehavior(panGroup, example, onNodeDrop, () => panOffsetRef.current))
         .style("cursor", "grab");
     }
 
@@ -173,17 +183,17 @@ export const useGraphSimulation = ({
     }
 
     // Setup new Edge creation
-    const edgePreviewLayer = svg
+    const edgePreviewLayer = panGroup
       .append<SVGGElement>("g")
       .attr("class", "edge-preview-layer")
       .attr("pointer-events", "all");
 
     if (buildingMode) {
-      svg.call(createEdgeDragBehavior(svg, edgePreviewLayer, onCreateNewEdge) as any);
+      svg.call(createEdgeDragBehavior(panGroup, edgePreviewLayer, onCreateNewEdge) as any);
     }
 
     // Setup brush
-    const brush = createBrushBehavior(WIDTH, HEIGHT, mainNodes, setSelectedNodes, onSelectionChange);
+    const brush = createBrushBehavior(WIDTH, HEIGHT, mainNodes, setSelectedNodes, onSelectionChange, () => panOffsetRef.current);
     brushLayer
       .call(brush)
       .select(".selection")
@@ -207,5 +217,5 @@ export const useGraphSimulation = ({
 
   }, [mainNodes, edges, inputs, outputs, onNodeDrop, contextMenu?.visible]);
 
-  return { svgRef, nodeGroupRef };
+  return { svgRef, nodeGroupRef, panGroupRef, setPanOffset };
 };
