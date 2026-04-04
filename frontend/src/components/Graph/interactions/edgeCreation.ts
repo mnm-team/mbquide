@@ -3,7 +3,7 @@ import { NodeType, Edge } from '../types';
 import { findClosestNode } from '../utils/functions';
 
 export const createEdgeDragBehavior = (
-  svg: d3.Selection<SVGSVGElement | null, unknown, null, undefined>,
+  svg: d3.Selection<SVGGElement, unknown, null, undefined>,
   edgePreviewLayer: d3.Selection<SVGGElement, unknown, null, undefined>,
   addEdge?: (edge?: Edge) => void,
 ) => {

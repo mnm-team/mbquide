@@ -1,12 +1,13 @@
 import { useEffect, useRef, RefObject } from 'react';
 import * as d3 from 'd3';
-import { NodeType, Edge, SimEdge, ContextMenuState } from '../types';
-import { SVG_DIMENSIONS } from '../utils/constants';
+import { NodeType, Edge, SimEdge, ContextMenuState, OutputAdjustment } from '../types';
+import { OUTPUT_TABLE, SVG_DIMENSIONS } from '../utils/constants';
 import { BRUSH_COLORS, getFillColor, getFillColorZX, getLabelColor, getLabelColorZX } from '../utils/colors';
 import { setupAllFilters } from '../rendering/renderFilters';
 import { renderEdges } from '../rendering/renderEdges';
 import { renderNodeShapes } from '../rendering/renderNodes';
 import { renderBasisLabels, renderPhaseLabels } from '../rendering/renderLabels';
+import { renderOutputTables } from '../rendering/renderOutputTables';
 import { createExampleNodes, renderExampleNodeShapes, renderExampleLabels } from '../rendering/renderExamples';
 import { createNodeDragBehavior } from '../interactions/dragBehavior';
 import { createExampleDragBehavior } from '../interactions/exampleDrag';
@@ -28,11 +29,11 @@ type UseGraphSimulationProps = {
   onNodeDrop?: (node?: NodeType) => void;
   onNodeDelete?: (node?: NodeType) => void;
   onCreateNewEdge?: (edge?: Edge) => void;
-  updateOutputTables?: (nodes: NodeType[], outputs: number[]) => void;
   buildingMode?: boolean;
   onNodeDoubleClick?: (node: NodeType) => void;
   ignoreExamples?: boolean;
   classicZXcolors?: boolean;
+  outputAdjustments?: Record<number, OutputAdjustment>;
 };
 
 export const useGraphSimulation = ({
@@ -49,11 +50,11 @@ export const useGraphSimulation = ({
   onNodeDrop,
   onNodeDelete,
   onCreateNewEdge,
-  updateOutputTables,
   buildingMode,
   onNodeDoubleClick,
   ignoreExamples,
   classicZXcolors,
+  outputAdjustments,
 }: UseGraphSimulationProps) => {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const nodeGroupRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null);
@@ -159,6 +160,7 @@ export const useGraphSimulation = ({
     // Render labels
     const labelsT = renderBasisLabels(panGroup, nodes, classicZXcolors ? getLabelColorZX : getLabelColor);
     const labelsPhase = renderPhaseLabels(panGroup, nodes);
+    const outputTableGroups = renderOutputTables(panGroup, nodes, outputs, outputAdjustments ?? {});
 
     // Render example nodes
     const exampleNodes = createExampleNodes();
@@ -212,7 +214,7 @@ export const useGraphSimulation = ({
       labelsT.attr("x", (d) => d.x!).attr("y", (d) => d.y!);
       labelsPhase.attr("x", (d) => d.x!).attr("y", (d) => d.y!);
       
-      if (updateOutputTables) updateOutputTables(nodes, outputs);
+      outputTableGroups.attr('transform', d => `translate(${(d.x ?? 0) + OUTPUT_TABLE.X_OFFSET}, ${(d.y ?? 0) + OUTPUT_TABLE.Y_OFFSET})`);
     });
 
   }, [mainNodes, edges, inputs, outputs, onNodeDrop, contextMenu?.visible]);

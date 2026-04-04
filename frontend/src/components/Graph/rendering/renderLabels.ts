@@ -2,7 +2,7 @@ import * as d3 from 'd3';
 import { NodeType } from '../types';
 
 export const renderBasisLabels = (
-  svg: d3.Selection<SVGSVGElement | null, unknown, null, undefined>,
+  svg: d3.Selection<SVGGElement, unknown, null, undefined>,
   nodes: NodeType[],
   colorMap: (d: NodeType) => string
 ) => {
@@ -20,7 +20,7 @@ export const renderBasisLabels = (
 };
 
 export const renderPhaseLabels = (
-  svg: d3.Selection<SVGSVGElement | null, unknown, null, undefined>,
+  svg: d3.Selection<SVGGElement, unknown, null, undefined>,
   nodes: NodeType[]
 ) => {
   return svg

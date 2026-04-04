@@ -2,7 +2,7 @@ import * as d3 from 'd3';
 import { NodeType } from '../types';
 
 export function findClosestNode(
-  svg: d3.Selection<SVGSVGElement | null, unknown, null, undefined>,
+  svg: d3.Selection<SVGGElement, unknown, null, undefined>,
   x: number,
   y: number,
   maxDistance: number = Infinity

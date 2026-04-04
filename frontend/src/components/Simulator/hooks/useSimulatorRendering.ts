@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
-import { NodeType, Edge, SimEdge } from '../types';
+import { NodeType, Edge, SimEdge, OutputAdjustment } from '../types';
 
 // Reuse rendering from MBQC_Graph
 import { setupAllFilters } from '../../Graph/rendering/renderFilters';
 import { renderEdges } from '../../Graph/rendering/renderEdges';
 import { renderNodeShapes } from '../../Graph/rendering/renderNodes';
+import { renderOutputTables } from '../../Graph/rendering/renderOutputTables';
 
 // Simulator-specific rendering
 import { renderBasisLabelsWithOutcomes, renderPhaseLabelsSimulator, renderIdLabels } from '../rendering/renderLabels';
@@ -26,7 +27,7 @@ type UseSimulatorRenderingProps = {
   setSelectedNodes: (nodes: NodeType[]) => void;
   onSelectionChange?: (selected: NodeType[]) => void;
   measureOperation?: (id: number) => void;
-  updateOutputTables: (nodes: NodeType[], outputs: number[]) => void;
+  outputAdjustments?: Record<number, OutputAdjustment>;
 };
 
 export const useSimulatorRendering = ({
@@ -44,7 +45,7 @@ export const useSimulatorRendering = ({
   setSelectedNodes,
   onSelectionChange,
   measureOperation,
-  updateOutputTables,
+  outputAdjustments,
 }: UseSimulatorRenderingProps) => {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const nodeGroupRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null);
@@ -185,6 +186,7 @@ export const useSimulatorRendering = ({
     const labelsT = renderBasisLabelsWithOutcomes(rootGroup, nodes, outcomes);
     const labelsPhase = renderPhaseLabelsSimulator(rootGroup, nodes, measured);
     const labelsId = renderIdLabels(rootGroup, nodes);
+    const outputTableGroups = renderOutputTables(rootGroup, nodes, outputs, outputAdjustments ?? {});
 
     simulation.on("tick", () => {
       link
@@ -199,7 +201,7 @@ export const useSimulatorRendering = ({
       labelsPhase.attr("x", (d) => d.x!).attr("y", (d) => d.y!);
       labelsId.attr("x", (d) => d.x!).attr("y", (d) => d.y!);
 
-      updateOutputTables(nodes, outputs);
+      outputTableGroups.attr('transform', d => `translate(${(d.x ?? 0) + 30}, ${(d.y ?? 0) - 40})`);
     });
 
     return () => {
