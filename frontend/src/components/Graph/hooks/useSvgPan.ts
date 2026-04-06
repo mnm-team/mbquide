@@ -40,6 +40,7 @@ export function useSvgPan(svgRef: RefObject<SVGSVGElement | null>) {
   const onPointerUp = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
     if (!isPanning.current) return;
     isPanning.current = false;
+    e.currentTarget.style.cursor = 'grab';
   }, []);
 
   return { translate, onPointerDown, onPointerMove, onPointerUp };

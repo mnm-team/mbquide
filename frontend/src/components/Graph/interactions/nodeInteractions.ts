@@ -50,7 +50,10 @@ export const applyNodeInteractions = (
             }
         });
 
-        node.on("contextmenu", null);
+        node.on("contextmenu", function (event, d) {
+            setSelectedNodes([d]);
+            if (onSelectionChange) onSelectionChange([d]);
+        });
 
     // NO BUILD MODE
     } else {

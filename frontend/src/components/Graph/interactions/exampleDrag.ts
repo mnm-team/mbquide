@@ -10,10 +10,10 @@ declare global {
 }
 
 export const createExampleDragBehavior = (
-  panGroup: d3.Selection<SVGGElement, unknown, null, undefined>,  // ← changed from svg
+  panGroup: d3.Selection<SVGGElement, unknown, null, undefined>,
   exampleNodes: d3.Selection<SVGGElement, NodeType, SVGGElement, unknown>,
   onNodeDrop?: (node?: NodeType, x?: number, y?: number, isInput?: boolean) => void,
-  getPanOffset?: () => { x: number; y: number },                 // ← add this
+  getPanOffset?: () => { x: number; y: number },  // Needed because example nodes not a part of pan Layer
 ) => {
   let inputBasis = "";
 

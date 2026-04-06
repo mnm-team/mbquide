@@ -26,7 +26,7 @@ type UseGraphSimulationProps = {
   setContextMenu?: (menu: ContextMenuState) => void;
   contextMenu?: ContextMenuState;
   onSelectionChange?: (selected: NodeType[]) => void;
-  onNodeDrop?: (node?: NodeType) => void;
+  onNodeDrop?: (node?: NodeType, x?: number, y?: number, isInput?: boolean) => void;
   onNodeDelete?: (node?: NodeType) => void;
   onCreateNewEdge?: (edge?: Edge) => void;
   buildingMode?: boolean;
@@ -59,92 +59,112 @@ export const useGraphSimulation = ({
   const svgRef = useRef<SVGSVGElement | null>(null);
   const nodeGroupRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null);
   const panGroupRef = useRef<SVGGElement | null>(null);
-
   const panOffsetRef = useRef({ x: 0, y: 0 });
+
   const setPanOffset = (offset: { x: number; y: number }) => {
     panOffsetRef.current = offset;
   };
 
-  // Update node glow effects based on selection
+  // Update glow filters on selected nodes
   useEffect(() => {
     const id = requestAnimationFrame(() => {
       if (!nodeGroupRef.current) return;
-      
-      const correctionSetIds: number[] = selectedNodes.flatMap(
-        node => node.correctionSet || []
-      );
 
-      const oddCorrectionSetIds: number[] = selectedNodes.flatMap(
-        node => node.oddCorrectionSet || []
-      );
+      const correctionSetIds: number[] = selectedNodes.flatMap(n => n.correctionSet || []);
+      const oddCorrectionSetIds: number[] = selectedNodes.flatMap(n => n.oddCorrectionSet || []);
 
       nodeGroupRef.current
         .selectAll<SVGCircleElement | SVGRectElement, NodeType>("circle, rect")
         .attr("filter", (d) => {
-          const isSelected = selectedNodes.some(node => node.id === d.id);
+          const isSelected = selectedNodes.some(n => n.id === d.id);
           const isInCorrection = correctionSetIds.includes(d.id);
           const isInOddCorrection = oddCorrectionSetIds.includes(d.id);
 
-          return isSelected && isInCorrection
-            ? "url(#selectedCorrectionGlow)"
-            : isSelected
-            ? "url(#selectedGlow)"
-            : isInCorrection
-            ? "url(#correctionGlow)"
-            : isInOddCorrection
-            ? "url(#oddCorrectionGlow)"
-            : null;
+          if (isSelected && isInCorrection) return "url(#selectedCorrectionGlow)";
+          if (isSelected)                   return "url(#selectedGlow)";
+          if (isInCorrection)               return "url(#correctionGlow)";
+          if (isInOddCorrection)            return "url(#oddCorrectionGlow)";
+          return null;
         });
     });
 
     return () => cancelAnimationFrame(id);
   }, [selectedNodes]);
 
-  // Main D3 rendering effect
+  // Full D3 render
   useEffect(() => {
-    const svg = d3.select(svgRef.current);
-    svg.selectAll('*').remove();
+    const svgEl = svgRef.current;
+    if (!svgEl) return;
 
-    const panGroup = svg.append("g").attr("class", "pan-layer");
+    const svg = d3.select(svgEl);
+    svg.selectAll('*').remove();
+    svg.on("contextmenu", event => event.preventDefault());
+
+    // Pan layer
+    const panGroup = svg.insert("g", ":first-child").attr("class", "pan-layer");
     panGroupRef.current = panGroup.node();
     panGroup.attr('transform', `translate(${panOffsetRef.current.x}, ${panOffsetRef.current.y})`);
+    panGroup.style("pointer-events", "all");
 
-    svg.on("contextmenu", event => event.preventDefault());  // Prevent right click on svg
+    // Brush layer
+    const brushLayer = panGroup.insert("g", ":first-child").attr("class", "brush");
+    
+    const brush = createBrushBehavior(
+      mainNodes,
+      setSelectedNodes,
+      onSelectionChange,
+    );
 
-    const { WIDTH, HEIGHT } = SVG_DIMENSIONS;
+    brushLayer
+      .call(brush)
+      .select(".selection")
+      .attr("fill", BRUSH_COLORS.FILL)
+      .attr("stroke", BRUSH_COLORS.STROKE);
 
-    // Setup filters
+    const brushOverlay = brushLayer.select<SVGRectElement>(".overlay");
+    brushOverlay.on("contextmenu", (event) => event.preventDefault());
+    brushOverlay.style("pointer-events", "all");
+
+    // Ctrl key: show grab when pressed
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Control") {
+        brushOverlay.style("cursor", "grab");
+      }
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === "Control") {
+        brushOverlay.style("cursor", "crosshair");
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+
+    // Filters
     const defs = panGroup.append('defs');
     setupAllFilters(defs);
 
-    // Prepare data
-    const nodes = [...mainNodes];
-    const simEdges = edges.map((e) => ({
-      ...e,
-      source: e.source,
-      target: e.target,
-    })) as unknown as SimEdge[];
+    // Simulation data
+    const simEdges = edges.map(e => ({ ...e, source: e.source, target: e.target })) as unknown as SimEdge[];
 
-    // Create simulation
     const simulation = d3
-      .forceSimulation(nodes)
+      .forceSimulation(mainNodes)
       .force("link", d3.forceLink(simEdges).id((d: any) => d.id));
 
-    // Render edges
+    // Edges
     const link = renderEdges(panGroup, simEdges);
 
-    // Render main nodes
-    const brushLayer = svg.insert("g", ":first-child").attr("class", "brush");
+
+    // Main node group
     const nodeGroup = panGroup.append("g").attr("stroke", "#fff");
     nodeGroupRef.current = nodeGroup;
 
     const node = nodeGroup
       .selectAll<SVGGElement, NodeType>("g")
-      .data(nodes)
+      .data(mainNodes)
       .join("g")
       .attr("class", "node")
-      .call(createNodeDragBehavior(simulation, selectedNodesRef, setSelectedNodes, onSelectionChange) as any)
-    
+      .call(createNodeDragBehavior(simulation, selectedNodesRef, setSelectedNodes, onSelectionChange) as any);
+
     applyNodeInteractions(
       node,
       setSelectedNodes,
@@ -155,14 +175,15 @@ export const useGraphSimulation = ({
       onNodeDoubleClick,
     );
 
-    renderNodeShapes(node, inputs, outputs, classicZXcolors ? getFillColorZX : getFillColor );
+    renderNodeShapes(node, inputs, outputs, classicZXcolors ? getFillColorZX : getFillColor);
 
-    // Render labels
-    const labelsT = renderBasisLabels(panGroup, nodes, classicZXcolors ? getLabelColorZX : getLabelColor);
-    const labelsPhase = renderPhaseLabels(panGroup, nodes);
-    const outputTableGroups = renderOutputTables(panGroup, nodes, outputs, outputAdjustments ?? {});
+    // Labels & output tables
+    const labelsT = renderBasisLabels(panGroup, mainNodes, classicZXcolors ? getLabelColorZX : getLabelColor);
+    const labelsPhase = renderPhaseLabels(panGroup, mainNodes);
+    const outputTableGroups = renderOutputTables(panGroup, mainNodes, outputs, outputAdjustments ?? {});
 
-    // Render example nodes
+    // Example nodes
+    // Appended directly to svg (not panGroup) so they stay fixed on screen.
     const exampleNodes = createExampleNodes();
     const exampleGroup = svg.append("g").attr("class", "examples");
 
@@ -170,21 +191,22 @@ export const useGraphSimulation = ({
       .selectAll<SVGGElement, NodeType>("g")
       .data(exampleNodes)
       .join("g")
-      .attr("class", (d) => `example-${d.id}`)
-      .attr("transform", (d) => `translate(${d.x},${d.y})`);
-      
-    if (buildingMode) {
-      example
-        .call(createExampleDragBehavior(panGroup, example, onNodeDrop, () => panOffsetRef.current))
-        .style("cursor", "grab");
-    }
+      .attr("class", d => `example-${d.id}`)
+      .attr("transform", d => `translate(${d.x},${d.y})`);
 
     if (!ignoreExamples) {
       renderExampleNodeShapes(example);
       renderExampleLabels(exampleGroup, exampleNodes);
     }
 
-    // Setup new Edge creation
+    // Attach example drag
+    if (buildingMode) {
+      example
+        .call(createExampleDragBehavior(panGroup, example, onNodeDrop, () => panOffsetRef.current))
+        .style("cursor", "grab");
+    }
+
+    // Edge creation drag
     const edgePreviewLayer = panGroup
       .append<SVGGElement>("g")
       .attr("class", "edge-preview-layer")
@@ -194,30 +216,34 @@ export const useGraphSimulation = ({
       svg.call(createEdgeDragBehavior(panGroup, edgePreviewLayer, onCreateNewEdge) as any);
     }
 
-    // Setup brush
-    const brush = createBrushBehavior(WIDTH, HEIGHT, mainNodes, setSelectedNodes, onSelectionChange, () => panOffsetRef.current);
-    brushLayer
-      .call(brush)
-      .select(".selection")
-      .attr("fill", BRUSH_COLORS.FILL)
-      .attr("stroke", BRUSH_COLORS.STROKE);
 
     // Simulation tick
     simulation.on("tick", () => {
       link
-        .attr("x1", (d) => (d.source as NodeType).x!)
-        .attr("y1", (d) => (d.source as NodeType).y!)
-        .attr("x2", (d) => (d.target as NodeType).x!)
-        .attr("y2", (d) => (d.target as NodeType).y!);
+        .attr("x1", d => (d.source as NodeType).x!)
+        .attr("y1", d => (d.source as NodeType).y!)
+        .attr("x2", d => (d.target as NodeType).x!)
+        .attr("y2", d => (d.target as NodeType).y!);
 
-      node.attr("transform", (d) => `translate(${d.x},${d.y})`);
-      labelsT.attr("x", (d) => d.x!).attr("y", (d) => d.y!);
-      labelsPhase.attr("x", (d) => d.x!).attr("y", (d) => d.y!);
-      
-      outputTableGroups.attr('transform', d => `translate(${(d.x ?? 0) + OUTPUT_TABLE.X_OFFSET}, ${(d.y ?? 0) + OUTPUT_TABLE.Y_OFFSET})`);
+      node.attr("transform", d => `translate(${d.x},${d.y})`);
+
+      labelsT.attr("x", d => d.x!).attr("y", d => d.y!);
+      labelsPhase.attr("x", d => d.x!).attr("y", d => d.y!);
+
+      outputTableGroups.attr(
+        'transform',
+        d => `translate(${(d.x ?? 0) + OUTPUT_TABLE.X_OFFSET}, ${(d.y ?? 0) + OUTPUT_TABLE.Y_OFFSET})`,
+      );
     });
 
-  }, [mainNodes, edges, inputs, outputs, onNodeDrop, contextMenu?.visible]);
+    // Cleanup
+    return () => {
+      simulation.stop();
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
 
-  return { svgRef, nodeGroupRef, panGroupRef, setPanOffset };
+  }, [mainNodes, edges, inputs, outputs, onNodeDrop, contextMenu?.visible, buildingMode]);
+
+  return { svgRef, nodeGroupRef, panGroupRef, setPanOffset};
 };
