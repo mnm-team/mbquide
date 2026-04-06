@@ -27,7 +27,7 @@ type UseGraphSimulationProps = {
   contextMenu?: ContextMenuState;
   onSelectionChange?: (selected: NodeType[]) => void;
   onNodeDrop?: (node?: NodeType, x?: number, y?: number, isInput?: boolean) => void;
-  onNodeDelete?: (node?: NodeType) => void;
+  onNodeDelete?: (nodes?: NodeType[]) => void;
   onCreateNewEdge?: (edge?: Edge) => void;
   buildingMode?: boolean;
   onNodeDoubleClick?: (node: NodeType) => void;
@@ -125,10 +125,22 @@ export const useGraphSimulation = ({
     brushOverlay.on("contextmenu", (event) => event.preventDefault());
     brushOverlay.style("pointer-events", "all");
 
-    // Ctrl key: show grab when pressed
+    // Key Interactions
     const handleKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
       if (e.key === "Control") {
         brushOverlay.style("cursor", "grab");
+      }
+      
+      if (e.key === "Delete" || e.key === "Backspace") {
+        if (!buildingMode) return;
+        const selected = selectedNodesRef.current;
+
+        if (selected.length > 0 && onNodeDelete) {
+          onNodeDelete(selected);
+        }
       }
     };
     const handleKeyUp = (e: KeyboardEvent) => {

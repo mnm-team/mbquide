@@ -90,18 +90,6 @@ export default function MBQC_App() {
     areNonPlanar,
   } = useGraphValidation(nodes, selectedNodes, edges, inputs, outputs);
 
-  useEffect(() => {
-    if (!loading) return;
-    const interval = setInterval(() => {
-      fetchGraph();
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [loading, fetchGraph]);
-
-  useEffect(() => {
-    fetchGraph();
-  }, [fetchGraph]);
-
   const handleUndo = useCallback(() => {
     const previousState = undoHistory(getCurrentState());
     if (previousState) {
@@ -129,6 +117,57 @@ export default function MBQC_App() {
       );
     }
   }, [redoHistory, getCurrentState, updateState, writeGraph]);
+
+  // Effect: Fetch graph
+  useEffect(() => {
+    fetchGraph();
+  }, [fetchGraph]);
+
+  // Effect: Loading Overlay
+  useEffect(() => {
+    if (!loading) return;
+    const interval = setInterval(() => {
+      fetchGraph();
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [loading, fetchGraph]);
+
+  // Effect: Key handling
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isCtrl = e.ctrlKey || e.metaKey;
+
+      // Ignore typing in inputs
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+      // Undo
+      if (isCtrl && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        handleUndo();
+        return;
+      }
+
+      // Redo
+      if (isCtrl && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+        e.preventDefault();
+        handleRedo();
+        return;
+      }
+
+      // Toggle building mode
+      if (e.key === 'b' || e.key === 'B') {
+        e.preventDefault();
+        setBuildingMode(prev => !prev);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [handleUndo, handleRedo]);
 
   const handlePrintNodes = useCallback(() => {
     console.log('Selected Nodes:', selectedNodes);
@@ -291,47 +330,74 @@ export default function MBQC_App() {
     writeGraph, fetchGraphPreservePositions, saveCurrentStateToHistory,
   ]);
 
-  const handleNodeDelete = useCallback(async (nodeToDelete?: NodeType) => {
-    if (!nodeToDelete) return;
+  const handleNodeDelete = useCallback(async (nodesToDelete?: NodeType[]) => {
+    if (!nodesToDelete || nodesToDelete.length === 0) return;
 
     saveCurrentStateToHistory();
 
-    const deletedId = nodeToDelete.id;
+    const deleteIds = new Set(nodesToDelete.map(n => n.id));
 
-    const updatedNodes = nodes
-      .filter(node => node.id !== deletedId)
-      .map(node => (node.id > deletedId ? { ...node, id: node.id - 1 } : node));
+    // Step 1: Filter remaining nodes
+    const remainingNodes = nodes.filter(node => !deleteIds.has(node.id));
+
+    // Step 2: Build ID remap
+    const sortedRemaining = [...remainingNodes].sort((a, b) => a.id - b.id);
+
+    const idMap = new Map<number, number>();
+    sortedRemaining.forEach((node, newIndex) => {
+      idMap.set(node.id, newIndex);
+    });
+
+    // Step 3: Apply remap to nodes
+    const updatedNodes = sortedRemaining.map(node => ({
+      ...node,
+      id: idMap.get(node.id)!,
+    }));
     setNodes(updatedNodes);
 
+    // Step 4: Update edges
     const updatedEdges = edges
-      .filter(edge => edge.source !== deletedId && edge.target !== deletedId)
+      .filter(edge => !deleteIds.has(edge.source) && !deleteIds.has(edge.target))
       .map(edge => ({
-        source: edge.source > deletedId ? edge.source - 1 : edge.source,
-        target: edge.target > deletedId ? edge.target - 1 : edge.target,
+        source: idMap.get(edge.source)!,
+        target: idMap.get(edge.target)!,
         colorCode: edge.colorCode,
       }));
     setEdges(updatedEdges);
 
+    // Step 5: Inputs
     const updatedInputs = inputs
-      .filter(id => id !== deletedId)
-      .map(id => (id > deletedId ? id - 1 : id));
+      .filter(id => !deleteIds.has(id))
+      .map(id => idMap.get(id)!);
     setInputs(updatedInputs);
 
+    // Step 6: Outputs
     const updatedOutputs = outputs
-      .filter(id => id !== deletedId)
-      .map(id => (id > deletedId ? id - 1 : id));
+      .filter(id => !deleteIds.has(id))
+      .map(id => idMap.get(id)!);
     setOutputs(updatedOutputs);
 
+    // Step 7: Adjustments
     const updatedAdjustments: Record<string, OutputAdjustment> = {};
     Object.entries(adjustments || {}).forEach(([key, value]) => {
-      const numericKey = parseInt(key, 10);
-      if (numericKey === deletedId) return;
-      const newKey = numericKey > deletedId ? (numericKey - 1).toString() : key;
-      updatedAdjustments[newKey] = value;
+      const oldId = parseInt(key, 10);
+      if (deleteIds.has(oldId)) return;
+
+      const newId = idMap.get(oldId);
+      if (newId !== undefined) {
+        updatedAdjustments[newId.toString()] = value;
+      }
     });
     setAdjustments(updatedAdjustments);
 
-    await writeGraph(updatedNodes, updatedEdges, updatedInputs, updatedOutputs, updatedAdjustments);
+    await writeGraph(
+      updatedNodes,
+      updatedEdges,
+      updatedInputs,
+      updatedOutputs,
+      updatedAdjustments
+    );
+
     fetchGraphPreservePositions(updatedNodes);
   }, [
     nodes, edges, inputs, outputs, adjustments,

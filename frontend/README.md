@@ -2,10 +2,18 @@
 
 ## Editor
 
+### Graph Interaction
+
+| Action | Interaction |
+|--------|-------------|
+| Move the graph | **Hold `Ctrl` and drag** on the background |
+| Select multiple vertices | **Drag on background** (without holding `Ctrl`) to create a selection brush |
+| Select a single vertex | **Click** directly on the vertex |
+| Move a vertex | **Click and drag** the vertex to a new position |
 
 ### Building Mode
 
-Building mode allows unrestricted graph editing and construction.
+Building mode allows unrestricted graph editing and construction. It can be accessed via the radio button in the top right or by pressing `B`.
 
 #### Creating Vertices
 
@@ -16,8 +24,8 @@ Building mode allows unrestricted graph editing and construction.
 
 | Action | Interaction |
 |------|-------------|
-| Remove a vertex | **Middle-click** on the node |
-| Set vertex phase | **Double-click** the node and enter the phase value |
+| Remove a vertex | **Middle-click** a node, or select it and press `Del` |
+| Set vertex phase | **Double-click** a node, or press `Enter` while it is selected, then enter a value |
 | Add or remove an edge | **Right-click drag** between two nodes |
 
 When leaving building mode:

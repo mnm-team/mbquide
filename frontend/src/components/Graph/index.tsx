@@ -83,30 +83,26 @@ export function MBQC_Graph({
   }, [selectedNodes]);
 
   useEffect(() => {
-    const svgEl = svgRef.current;
-    if (!svgEl) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
 
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Control') {
-        svgEl.style.cursor = 'grab';
+      if (!buildingMode) return;
+
+      if (e.key === 'Enter' && selectedNodes.length === 1) {
+        e.preventDefault();
+        setPhaseModalNode(selectedNodes[0]);
       }
     };
 
-    const onKeyUp = (e: KeyboardEvent) => {
-      if (e.key === 'Control') {
-        svgEl.style.cursor = 'default';
-      }
-    };
-
-    window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('keydown', handleKeyDown);
 
     return () => {
-      window.removeEventListener('keydown', onKeyDown);
-      window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [svgRef]);
+  }, [buildingMode, selectedNodes]);
 
+  
   // Context menu handlers
   const handleLocalComplementation = () => {
     if (!runLocalComplementation) return;
