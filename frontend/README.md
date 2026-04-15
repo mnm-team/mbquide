@@ -80,6 +80,7 @@ The simulator allows interactive execution of an MBQC pattern directly on the gr
 | Action | Interaction |
 |------|-------------|
 | Move the graph | Click and drag on the **background** |
+| Zoom in / out | **Scroll** (mouse wheel or trackpad gesture) |
 | Show correction function | **Click** on a vertex |
 | Measure a vertex | **Double-click** a vertex if it is currently measurable |
 
