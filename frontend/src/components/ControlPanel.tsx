@@ -85,7 +85,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
   const operationButtons = [
     { onClick: onPrintNodes, disabled: selectedCount === 0, label: 'Print', show: !!onPrintNodes },
     { onClick: onSimplifyGraph, disabled: simplifyGraphDisabled, label: simplificationIcon + ' Simplify', sublabel: 'Automatically simplify the Graph', show: !!onSimplifyGraph },
-    { onClick: onResetGraph, disabled: resetGraphDisabled, label: resetIcon + ' Reset', sublabel: 'Reset to empty Graph', show: !!onResetGraph },
+    { onClick: onResetGraph, disabled: resetGraphDisabled, label: resetIcon + ' Clear', sublabel: 'Clear to empty Graph', show: !!onResetGraph },
     { onClick: onResetSim, disabled: !canResetSim, label: resetIcon + ' Reset', sublabel: 'Reset Simulator', show: !!onResetSim },
     { onClick: onLocalComplementation, disabled: !isLCable, label: actionIcon + ' LC', sublabel: 'Local Complementation', show: !!onLocalComplementation },
     { onClick: onPivot, disabled: !isPivotable, label: actionIcon + ' Pivot', sublabel: 'Pivot about an edge', show: !!onPivot },
