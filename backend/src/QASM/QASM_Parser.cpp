@@ -86,14 +86,14 @@ void QASMParser::parseLine(const std::string& line) {
             circuit.addGate("measure", {q}, {c}, {});
         }
     } else {
-        // Gates: h q[0]; or cx q[0],q[1];
+        // Gates: h q[0]; or cx q[0],q[1]; or ccx q[0],q[1],q[2];
         std::string rest;
         std::getline(ss, rest, ';');
         rest = token + rest;
         std::smatch match;
 
-        // param gates
-        std::regex param_gate_regex(R"((\w+)\(([^)]*)\)\s+([a-zA-Z_][a-zA-Z0-9_]*)\[(\d+)\](?:,\s*([a-zA-Z_][a-zA-Z0-9_]*)\[(\d+)\])?)");
+        // param gates (up to 3 qubits)
+        std::regex param_gate_regex(R"((\w+)\(([^)]*)\)\s+([a-zA-Z_][a-zA-Z0-9_]*)\[(\d+)\](?:,\s*([a-zA-Z_][a-zA-Z0-9_]*)\[(\d+)\](?:,\s*([a-zA-Z_][a-zA-Z0-9_]*)\[(\d+)\])?)?)");
         if (std::regex_search(rest, match, param_gate_regex)) {
             std::string name = match[1];
             std::string param_str = match[2];
@@ -113,12 +113,17 @@ void QASMParser::parseLine(const std::string& line) {
                 int idx2 = std::stoi(match[6]);
                 qubits.push_back(getQubitIndex(reg2_name, idx2));
             }
+            if (match[7].matched) {
+                std::string reg3_name = match[7];
+                int idx3 = std::stoi(match[8]);
+                qubits.push_back(getQubitIndex(reg3_name, idx3));
+            }
             circuit.addGate(name, qubits, {}, params);
             return;
         }
 
-        // non-parameterized
-        std::regex gate_regex(R"((\w+)\s+([a-zA-Z_][a-zA-Z0-9_]*)\[(\d+)\](?:,\s*([a-zA-Z_][a-zA-Z0-9_]*)\[(\d+)\])?)");
+        // non-parameterized (up to 3 qubits)
+        std::regex gate_regex(R"((\w+)\s+([a-zA-Z_][a-zA-Z0-9_]*)\[(\d+)\](?:,\s*([a-zA-Z_][a-zA-Z0-9_]*)\[(\d+)\](?:,\s*([a-zA-Z_][a-zA-Z0-9_]*)\[(\d+)\])?)?)");
         if (std::regex_search(rest, match, gate_regex)) {
             std::string name = match[1];
             std::string reg1_name = match[2];
@@ -129,6 +134,11 @@ void QASMParser::parseLine(const std::string& line) {
                 std::string reg2_name = match[4];
                 int idx2 = std::stoi(match[5]);
                 qubits.push_back(getQubitIndex(reg2_name, idx2));
+            }
+            if (match[6].matched) {
+                std::string reg3_name = match[6];
+                int idx3 = std::stoi(match[7]);
+                qubits.push_back(getQubitIndex(reg3_name, idx3));
             }
             circuit.addGate(name, qubits, {}, {});
         }

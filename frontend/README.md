@@ -2,10 +2,18 @@
 
 ## Editor
 
+### Graph Interaction
+
+| Action | Interaction |
+|--------|-------------|
+| Move the graph | **Hold `Ctrl` and drag** on the background |
+| Select multiple vertices | **Drag on background** (without holding `Ctrl`) to create a selection brush |
+| Select a single vertex | **Click** directly on the vertex |
+| Move a vertex | **Click and drag** the vertex to a new position |
 
 ### Building Mode
 
-Building mode allows unrestricted graph editing and construction.
+Building mode allows unrestricted graph editing and construction. It can be accessed via the radio button in the top right or by pressing `B`.
 
 #### Creating Vertices
 
@@ -16,8 +24,8 @@ Building mode allows unrestricted graph editing and construction.
 
 | Action | Interaction |
 |------|-------------|
-| Remove a vertex | **Middle-click** on the node |
-| Set vertex phase | **Double-click** the node and enter the phase value |
+| Remove a vertex | **Middle-click** a node, or select it and press `Del` |
+| Set vertex phase | **Double-click** a node, or press `Enter` while it is selected, then enter a value |
 | Add or remove an edge | **Right-click drag** between two nodes |
 
 When leaving building mode:
@@ -40,6 +48,7 @@ Users can simplify or restructure the pattern using rewriting rules.
 | 💥 **Pivot** | Use the brush tool to select two adjacent vertices, then apply a **Pivot** to the edge between them. |
 | 💥 **Z-Insert** | Insert a **Z vertex** connected to all currently selected vertices. |
 | 💥 **Z-Delete** | Remove a **Z**, **XZ**, or **YZ** vertex. |
+| 🧙‍♂️ **Simplify** | Automatically applying multiple rewriting rules to simplify the graph. |
 
 ### Pauli Flow Visualization 🌊
 
@@ -71,6 +80,7 @@ The simulator allows interactive execution of an MBQC pattern directly on the gr
 | Action | Interaction |
 |------|-------------|
 | Move the graph | Click and drag on the **background** |
+| Zoom in / out | **Scroll** (mouse wheel or trackpad gesture) |
 | Show correction function | **Click** on a vertex |
 | Measure a vertex | **Double-click** a vertex if it is currently measurable |
 

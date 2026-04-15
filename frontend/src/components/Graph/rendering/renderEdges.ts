@@ -8,7 +8,7 @@ const EDGE_COLOR_MAPPING: { [key: number]: string } = {
 };
 
 export const renderEdges = (
-  svg: d3.Selection<SVGSVGElement | null, unknown, null, undefined>,
+  svg: d3.Selection<SVGGElement, unknown, null, undefined>,
   edges: SimEdge[]
 ) => {
   return svg

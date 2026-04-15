@@ -35,8 +35,8 @@ export type GraphProps = {
   outputs: number[];
   outputAdjustments?: Record<string, OutputAdjustment>;
   onSelectionChange?: (selected: NodeType[]) => void;
-  onNodeDrop?: (node?: NodeType) => void;
-  onNodeDelete?: (node?: NodeType) => void;
+  onNodeDrop?: (node?: NodeType, x?: number, y?: number, isInput?: boolean) => void;
+  onNodeDelete?: (nodes?: NodeType[]) => void;
   onCreateNewEdge?: (edge?: Edge) => void;
   runLocalComplementation?: () => void;
   runRelabelingPlanar?: (basis: string | undefined) => void;

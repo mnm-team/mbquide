@@ -4,7 +4,7 @@ import { getLabelColor } from '../../Graph/utils/colors';
 
 // Custom basis labels that show outcomes
 export const renderBasisLabelsWithOutcomes = (
-  svg: d3.Selection<SVGSVGElement | null, unknown, null, undefined>,
+  svg: d3.Selection<SVGGElement, unknown, null, undefined>,
   nodes: NodeType[],
   outcomes: [number, number][]
 ) => {
@@ -33,7 +33,7 @@ export const renderBasisLabelsWithOutcomes = (
 };
 
 export const renderPhaseLabelsSimulator = (
-  svg: d3.Selection<SVGSVGElement | null, unknown, null, undefined>,
+  svg: d3.Selection<SVGGElement, unknown, null, undefined>,
   nodes: NodeType[],
   measured: number[],
 ) => {
@@ -54,7 +54,7 @@ export const renderPhaseLabelsSimulator = (
 
 // Simulator-specific: render node IDs
 export const renderIdLabels = (
-  svg: d3.Selection<SVGSVGElement | null, unknown, null, undefined>,
+  svg: d3.Selection<SVGGElement, unknown, null, undefined>,
   nodes: NodeType[]
 ) => {
   return svg

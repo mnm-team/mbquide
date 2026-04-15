@@ -15,6 +15,7 @@ float normalize_radians(float radians) {
     if (radians < 0) {
         radians += 2*M_PI;
     }
+    if (fAlmostEqual(radians, 2*M_PI)) radians = 0;
     return radians;
 }
 
@@ -36,7 +37,7 @@ std::string radiansToString(float radians) {
         return "3\u03c0/2";
     } else if (fAlmostEqual(normalized, 7 * M_PI / 4)) {
         return "7\u03c0/4";
-    } else if (fAlmostEqual(normalized, 2 * M_PI)) {
+    } else if (fAlmostEqual(normalized, 2 * M_PI)) {  // Should not happen
         return "2\u03c0";
     } else if (fAlmostEqual(normalized, 0)) {
         return "";

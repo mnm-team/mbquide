@@ -3,7 +3,7 @@ import { NodeType, Edge } from '../types';
 import { findClosestNode } from '../utils/functions';
 
 export const createEdgeDragBehavior = (
-  svg: d3.Selection<SVGSVGElement | null, unknown, null, undefined>,
+  svg: d3.Selection<SVGGElement, unknown, null, undefined>,
   edgePreviewLayer: d3.Selection<SVGGElement, unknown, null, undefined>,
   addEdge?: (edge?: Edge) => void,
 ) => {
@@ -14,13 +14,10 @@ export const createEdgeDragBehavior = (
     .drag<SVGSVGElement, unknown>()
     .filter(event => event.button === 2)
     .on("start", event => {
-      
-      const [svgX, svgY] = d3.pointer(event, svg.node());
-      const rect = svg.node()!.getBoundingClientRect();
-      const clientX = rect.left + svgX;
-      const clientY = rect.top + svgY;
 
-      const element = findClosestNode(svg, clientX, clientY, 50);
+      const [svgX, svgY] = d3.pointer(event, svg.node());
+
+      const element = findClosestNode(svg, svgX, svgY, 50);
       if (!element) return;
       
       sourceNode = element;
@@ -49,11 +46,8 @@ export const createEdgeDragBehavior = (
       previewLine = null;
       
       const [svgX, svgY] = d3.pointer(event, svg.node());
-      const rect = svg.node()!.getBoundingClientRect();
-      const clientX = rect.left + svgX;
-      const clientY = rect.top + svgY;
       
-      const element = findClosestNode(svg, clientX, clientY, 50);
+      const element = findClosestNode(svg, svgX, svgY, 50);
       if (!element) {
         sourceNode = null;
         return;

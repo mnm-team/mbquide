@@ -2,11 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { GraphProps, NodeType } from './types';
 import { useGraphSimulation } from './hooks/useGraphSimulation';
 import { useContextMenu } from './hooks/useContextMenu';
-import { useOutputTables } from './hooks/useOutputTables';
 import { ContextMenu } from './ui/ContextMenu';
-import { OutputTable } from './ui/OutputTable';
 import { PhaseInputModal } from './ui/phaseInputMode';
 import { BACKGROUND_COLOR } from './utils/colors';
+import { useSvgPan } from './hooks/useSvgPan';
 
 export function MBQC_Graph({
   nodes: mainNodes,
@@ -29,7 +28,6 @@ export function MBQC_Graph({
   const [phaseModalNode, setPhaseModalNode] = useState<NodeType | null>(null);
   
   const { contextMenu, setContextMenu } = useContextMenu();
-  const { outputTables, updateOutputTables } = useOutputTables();
 
   const handleNodeDoubleClick = (node: NodeType) => {
     setPhaseModalNode(node);
@@ -47,7 +45,7 @@ export function MBQC_Graph({
     setPhaseModalNode(null);
   };
 
-  const { svgRef } = useGraphSimulation({
+  const { svgRef, panGroupRef, setPanOffset } = useGraphSimulation({
     mainNodes,
     edges,
     inputs,
@@ -61,16 +59,50 @@ export function MBQC_Graph({
     onNodeDrop,
     onNodeDelete,
     onCreateNewEdge,
-    updateOutputTables,
     buildingMode,
     onNodeDoubleClick: handleNodeDoubleClick,
+    outputAdjustments,
   });
+
+  const { translate, onPointerDown, onPointerMove, onPointerUp } = useSvgPan(svgRef);
+
+
+  // Sync translate
+  useEffect(() => {
+    if (!panGroupRef.current) return;
+    panGroupRef.current.setAttribute(
+      'transform',
+      `translate(${translate.x}, ${translate.y})`
+    );
+    setPanOffset(translate);
+  }, [translate]);
 
   // Keep ref in sync with state
   useEffect(() => {
     selectedNodesRef.current = selectedNodes;
   }, [selectedNodes]);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+      if (!buildingMode) return;
+
+      if (e.key === 'Enter' && selectedNodes.length === 1) {
+        e.preventDefault();
+        setPhaseModalNode(selectedNodes[0]);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [buildingMode, selectedNodes]);
+
+  
   // Context menu handlers
   const handleLocalComplementation = () => {
     if (!runLocalComplementation) return;
@@ -99,24 +131,11 @@ export function MBQC_Graph({
         height="auto"
         preserveAspectRatio="xMidYMid meet"
         style={{ backgroundColor: BACKGROUND_COLOR }}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerLeave={onPointerUp}
       />
-     
-      {/* Output Tables */}
-      {Object.entries(outputTables).map(([nodeId, position]) => {
-        const node = mainNodes.find(n => n.id === parseInt(nodeId));
-        const adjustment = outputAdjustments[parseInt(nodeId)];
-        if (!node || !adjustment) return null;
-        
-        return (
-          <OutputTable
-            key={nodeId}
-            nodeId={parseInt(nodeId)}
-            position={position}
-            adjustment={adjustment}
-            svgRef={svgRef}
-          />
-        );
-      })}
 
       {/* Context Menu */}
       <ContextMenu

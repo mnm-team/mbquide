@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
-import { NodeType, Edge, SimEdge } from '../types';
+import { NodeType, Edge, SimEdge, OutputAdjustment } from '../types';
 
 // Reuse rendering from MBQC_Graph
 import { setupAllFilters } from '../../Graph/rendering/renderFilters';
 import { renderEdges } from '../../Graph/rendering/renderEdges';
 import { renderNodeShapes } from '../../Graph/rendering/renderNodes';
+import { renderOutputTables } from '../../Graph/rendering/renderOutputTables';
 
 // Simulator-specific rendering
 import { renderBasisLabelsWithOutcomes, renderPhaseLabelsSimulator, renderIdLabels } from '../rendering/renderLabels';
@@ -26,7 +27,7 @@ type UseSimulatorRenderingProps = {
   setSelectedNodes: (nodes: NodeType[]) => void;
   onSelectionChange?: (selected: NodeType[]) => void;
   measureOperation?: (id: number) => void;
-  updateOutputTables: (nodes: NodeType[], outputs: number[]) => void;
+  outputAdjustments?: Record<number, OutputAdjustment>;
 };
 
 export const useSimulatorRendering = ({
@@ -44,16 +45,15 @@ export const useSimulatorRendering = ({
   setSelectedNodes,
   onSelectionChange,
   measureOperation,
-  updateOutputTables,
+  outputAdjustments,
 }: UseSimulatorRenderingProps) => {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const nodeGroupRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null);
 
-  // Persisted pan offset — stored in a ref so the D3 effect always reads the
-  // latest value without needing it as a dependency (which would cause resets),
-  // and mirrored into state so React overlay components re-render correctly.
   const panOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const [panOffset, setPanOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const scaleRef = useRef<number>(1);
+
 
   useEffect(() => {
     const id = requestAnimationFrame(() => {
@@ -112,7 +112,7 @@ export const useSimulatorRendering = ({
 
     rootGroup.attr(
       "transform",
-      `translate(${panOffsetRef.current.x},${panOffsetRef.current.y})`
+      `translate(${panOffsetRef.current.x},${panOffsetRef.current.y}) scale(${scaleRef.current})`
     );
 
     let isDragging = false;
@@ -139,7 +139,7 @@ export const useSimulatorRendering = ({
           y: event.clientY - dragStart.y,
         };
         panOffsetRef.current = next;
-        rootGroup.attr("transform", `translate(${next.x},${next.y})`);
+        rootGroup.attr("transform", `translate(${next.x},${next.y}) scale(${scaleRef.current})`);
         setPanOffset({ ...next });
       })
       .on("mouseup.pan", () => {
@@ -152,6 +152,31 @@ export const useSimulatorRendering = ({
         isDragging = false;
         svg.style("cursor", "grab");
       });
+
+    svg.on("wheel.zoom", (event: WheelEvent) => {
+      event.preventDefault();
+
+      const zoomFactor = event.deltaY < 0 ? 1.1 : 0.9;
+      const newScale = Math.min(Math.max(scaleRef.current * zoomFactor, 0.4), 2);
+
+      // Zoom toward the cursor position
+      const rect = (svgRef.current as SVGSVGElement).getBoundingClientRect();
+      const mouseX = event.clientX - rect.left;
+      const mouseY = event.clientY - rect.top;
+
+      panOffsetRef.current = {
+        x: mouseX - (mouseX - panOffsetRef.current.x) * (newScale / scaleRef.current),
+        y: mouseY - (mouseY - panOffsetRef.current.y) * (newScale / scaleRef.current),
+      };
+
+      scaleRef.current = newScale;
+
+      rootGroup.attr(
+        "transform",
+        `translate(${panOffsetRef.current.x},${panOffsetRef.current.y}) scale(${newScale})`
+      );
+      setPanOffset({ ...panOffsetRef.current });
+    });
 
     const link = renderEdges(rootGroup, simEdges);
 
@@ -185,6 +210,7 @@ export const useSimulatorRendering = ({
     const labelsT = renderBasisLabelsWithOutcomes(rootGroup, nodes, outcomes);
     const labelsPhase = renderPhaseLabelsSimulator(rootGroup, nodes, measured);
     const labelsId = renderIdLabels(rootGroup, nodes);
+    const outputTableGroups = renderOutputTables(rootGroup, nodes, outputs, outputAdjustments ?? {});
 
     simulation.on("tick", () => {
       link
@@ -199,15 +225,15 @@ export const useSimulatorRendering = ({
       labelsPhase.attr("x", (d) => d.x!).attr("y", (d) => d.y!);
       labelsId.attr("x", (d) => d.x!).attr("y", (d) => d.y!);
 
-      updateOutputTables(nodes, outputs);
+      outputTableGroups.attr('transform', d => `translate(${(d.x ?? 0) + 30}, ${(d.y ?? 0) - 40})`);
     });
 
     return () => {
-      svg.on("mousedown.pan mousemove.pan mouseup.pan mouseleave.pan", null);
+      svg.on("mousedown.pan mousemove.pan mouseup.pan mouseleave.pan wheel.zoom", null);
       svg.style("cursor", null);
     };
 
   }, [mainNodes, edges, inputs, outputs, measured, outcomes, readyToMeasure, width, height]);
 
-  return { svgRef, panOffset };
+  return { svgRef };
 };

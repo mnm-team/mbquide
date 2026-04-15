@@ -61,9 +61,15 @@ Converts the current MBQC graph into a ZX graph and returns its JSON representat
 | `"lc"` | `node: int` | Local complementation on a node |
 | `"pivot"` | `u: int`, `v: int` | Pivot on edge (u, v) |
 | `"z-insert"` | `ids: int[]` | Z insertion on a list of nodes |
-| `"z-delete"` | `node: int` | Z deletion on a node |
+| `"z-delete"` | `ids: int[]` | Z deletion on a list of nodes |
 | `"relabel"` | `node: int` | Relabel a node |
 | `"relabel-planar"` | `node: int`, `pref-basis?: string` | Planar relabelling, with optional preferred measurement basis |
+
+#### Automatically simplify the graph
+```json
+{ "simplify": true }
+```
+Iteratively applies graph rewrites to minimize the graph.
 
 #### Compute focused Pauli flow
 ```json
@@ -83,9 +89,9 @@ Computes the Pauli flow for the current graph. Returns the graph JSON extended w
 
 #### Initialise a simulation
 ```json
-{ "simulate": true, "random": true, "input": "(0.707107)|00> + (0.707107)|11>" }
+{ "simulate": true, "random": true, "input": "(0.707107)|00> + (0.707107)|11>", "maxVecSize(Optional)": 128 }
 ```
-Initialises the simulator using the current graph and flow. Requires a valid Pauli flow to exist.
+Initialises the simulator using the current graph and flow. Requires a valid Pauli flow to exist. `maxVecSize` sets the maximum size of the vector that can be returned in the response JSON object.
 
 ---
 
@@ -131,9 +137,11 @@ Controls the simulator.
 
 #### Initialise
 ```json
-{ "init": true, "random": false, "input": "|0>" }
+{ "init": true, "random": false, "input": "|0>", "maxVecSize(Optional)": 128 }
 ```
 Initialises the simulator from the current graph and flow. Set `"random": true` to use random measurement outcomes.
+`maxVecSize` sets the maximum size of the vector that can be returned in the response JSON object.
+
 
 #### Measure a single node
 ```json

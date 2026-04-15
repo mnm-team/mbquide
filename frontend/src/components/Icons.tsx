@@ -1,4 +1,5 @@
 export const actionIcon = '💥'
+export const simplificationIcon = '🧙‍♂️'
 export const flowIcon = '🌊'
 export const focusIcon = '👁️'
 export const undoIcon = '↩️'

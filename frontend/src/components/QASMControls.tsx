@@ -2,9 +2,10 @@ import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { executeAPIOperation } from "../apps/MBQC/api/graphApi";
 import {
-  createTransformToZXOperation,
+  createTransformToMBQCOperation,
   createSimulateOperation,
   createGetFlowOperation,
+  createSimplifyOperation,
 } from "../apps/MBQC/api/operations";
 
 import { ActionButton, ExampleButton } from "./Buttons";
@@ -43,7 +44,7 @@ export function QASMControls({ qasmInput, setQasmInput }: Props) {
       setLoading(true);
       setError(null);
       await executeAPIOperation("qasm", { qasm: qasmInput });
-      await executeAPIOperation("qasm", createTransformToZXOperation());
+      await executeAPIOperation("qasm", createTransformToMBQCOperation());
       navigate("/MBQC");
     } catch (err: any) {
       setError("Failed to generate MBQC diagram.");
@@ -57,7 +58,8 @@ export function QASMControls({ qasmInput, setQasmInput }: Props) {
       setLoading(true);
       setError(null);
       await executeAPIOperation("qasm", { qasm: qasmInput });
-      await executeAPIOperation("qasm", createTransformToZXOperation());
+      await executeAPIOperation("qasm", createTransformToMBQCOperation());
+      await executeAPIOperation("graph", createSimplifyOperation());
       await executeAPIOperation("graph", createGetFlowOperation());
       await executeAPIOperation("graph", createSimulateOperation());
       navigate("/SIM");
@@ -68,10 +70,12 @@ export function QASMControls({ qasmInput, setQasmInput }: Props) {
     }
   }, [qasmInput, navigate]);
 
-  const bellQasm = `OPENQASM 2.0;\nqreg q[2];\nh q[0];\ncx q[0],q[1];`;
-  const hQasm = `OPENQASM 2.0;\nqreg q[1];\nh q[0];`;
-  const toffoliQasm = `OPENQASM 2.0;\nqreg a[3];\nx a[0];\nx a[1];\nh a[2];\ncx a[1],a[2];\nrz(-pi/4) a[2];\ncx a[0],a[2];\nrz(pi/4) a[2];\ncx a[1],a[2];\nrz(-pi/4) a[1];\nrz(-pi/4) a[2];\ncx a[0],a[2];\ncx a[0],a[1];\nrz(-pi/4) a[1];\ncx a[0],a[1];\nrz(pi/4) a[0];\nrz(pi/4) a[2];\nh a[2];`;
-  const DeJoQasm = `OPENQASM 2.0;\nqreg q[3];\nx q[2];\nh q[0];\nh q[1];\nh q[2];\n// Balanced oracle example: f(x0,x1)=x0 XOR x1\ncx q[0], q[2];\ncx q[1], q[2];\nh q[0];\nh q[1];\n`;
+  const bellQasm = `OPENQASM 2.0;\nqreg q[2];\n\nh q[0];\ncx q[0],q[1];`;
+  const hQasm = `OPENQASM 2.0;\nqreg q[1];\n\nh q[0];`;
+  const toffoliQasm = `OPENQASM 2.0;\nqreg q[3];\n\nx q[0];\nx q[1];\nh q[2];\ncx q[1],q[2];\nrz(-pi/4) q[2];\ncx q[0],q[2];\nrz(pi/4) q[2];\ncx q[1],q[2];\nrz(-pi/4) q[1];\nrz(-pi/4) q[2];\ncx q[0],q[2];\ncx q[0],q[1];\nrz(-pi/4) q[1];\ncx q[0],q[1];\nrz(pi/4) q[0];\nrz(pi/4) q[2];\nh q[2];`;
+  const DeJoQasm = `OPENQASM 2.0;\nqreg q[3];\n\nx q[2];\nh q[0];\nh q[1];\nh q[2];\n// Balanced oracle example: f(x0,x1)=x0 XOR x1\ncx q[0], q[2];\ncx q[1], q[2];\nh q[0];\nh q[1];`;
+  const tof3 = `OPENQASM 2.0;\nqreg q[5];\n\nh q[4];\nh q[4];\nccx q[0],q[1],q[4];\nh q[4];\nh q[4];\nh q[3];\nh q[3];\nccx q[2],q[4],q[3];\nh q[3];\nh q[3];\nh q[4];\nh q[4];\nccx q[0],q[1],q[4];\nh q[4];\nh q[4];`;
+  const mod5_4 = `OPENQASM 2.0;\n\nqreg q[5];\n\nx q[4];\nh q[4];\nh q[4];\nccx q[0],q[3],q[4];\nh q[4];\nh q[4];\nccx q[2],q[3],q[4];\nh q[4];\nh q[4];\ncx q[3],q[4];\nh q[4];\nh q[4];\nccx q[1],q[2],q[4];\nh q[4];\nh q[4];\ncx q[2],q[4];\nh q[4];\nh q[4];\nccx q[0],q[1],q[4];\nh q[4];\nh q[4];\ncx q[1],q[4];\ncx q[0],q[4];`;
 
   return (
     <div className="w-[350px] shrink-0 bg-slate-50 border-r border-gray-200 flex flex-col h-full font-sans">
@@ -155,10 +159,22 @@ export function QASMControls({ qasmInput, setQasmInput }: Props) {
               qubits="2q"
             />
             <ExampleButton
+              onClick={() => setQasmInput(tof3)}
+              label="Toff 3 Circuit"
+              description="https://github.com/zxcalc/pyzx/blob/master/circuits/feyn_bench/qasm/tof_3.qasm"
+              qubits="5q"
+            />
+            <ExampleButton
               onClick={() => setQasmInput(toffoliQasm)}
-              label="Toffoli Gate"
+              label="Toffoli Gate Decomposition"
               description="CCX decomposition"
               qubits="3q"
+            />
+            <ExampleButton
+              onClick={() => setQasmInput(mod5_4)}
+              label="Mod 5_4"
+              description="https://github.com/zxcalc/pyzx/blob/master/circuits/feyn_bench/qasm/mod5_4.qasm"
+              qubits="5q"
             />
             <ExampleButton
               onClick={() => setQasmInput(DeJoQasm)}

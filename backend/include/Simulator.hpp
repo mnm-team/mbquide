@@ -23,6 +23,7 @@ private:
     bool randomMeasurements;
     int totalNodes;
     int numInputNodes;
+    int maxVecSizeJSON;
     std::string inputStateString;
     StatevectorSimulator statevectorSimulator;
 
@@ -32,7 +33,8 @@ private:
     std::unordered_set<int> activeNodes;
     std::unordered_set<int> deactivatedNodes;
     std::set<std::pair<int, int>> activeEdges;
-    std::unordered_map<int, std::unordered_set<int>> dependencies;
+    std::unordered_map<int, std::unordered_set<int>> Xdependencies;
+    std::unordered_map<int, std::unordered_set<int>> Zdependencies;
     std::set<int> readyToMeasure;
 
     std::vector<int> qubitToGraphNode;
@@ -112,12 +114,115 @@ private:
             throw std::runtime_error("Not implemented other graph node rotations than X and Z");
         }
     }
+
+
+    // Returns true if a correction of 'corrType' has no effect on the
+    // measurement outcome of 'node' given its basis.
+    //
+    // Implementing the impact of https://arxiv.org/pdf/2207.09368v4 2.2
+    // -> A measurement impacts a vertex if the action of the correction anticommutes with one Pauli element of λ (MeasurementBasis)
+    //
+    // corrType is one of {"X", "Z", "Y"} 
+    bool correctionHasNoImpact(int node, char corrType) const {
+        auto [basis, angle] = graph.getMeasurement(node);
+
+        angle = normalize_radians(angle);
+
+        if (corrType != 'X' && corrType != 'Z' && corrType !='Y')  {
+            std::cerr << "Simulator: correctionType can only be X, Z or Y and not " << corrType << "!\n";
+        }
+
+        switch (basis) {
+            case MeasurementBasis::OUTPUT:
+                return false;
+            case MeasurementBasis::X:
+                return corrType == 'X';
+            case MeasurementBasis::Z:
+                return corrType == 'Z';
+            case MeasurementBasis::Y:
+                return corrType == 'Y';
+            case MeasurementBasis::XY:
+                if (corrType == 'Z') return false;
+                if (fAlmostEqual(angle, 0) || fAlmostEqual(angle, M_PI)) {
+                    return corrType == 'X';
+                }
+                if (fAlmostEqual(angle, M_PI/2) || fAlmostEqual(angle, 3 * M_PI/2)) {
+                    return corrType == 'Y';
+                }
+                return false;
+            case MeasurementBasis::XZ:
+                if (corrType == 'Y') return false;
+                if (fAlmostEqual(angle, 0) || fAlmostEqual(angle, M_PI)) {
+                    return corrType == 'Z';
+                }
+                if (fAlmostEqual(angle, M_PI/2) || fAlmostEqual(angle, 3 * M_PI/2)) {
+                    return corrType == 'X';
+                }
+                return false;
+            case MeasurementBasis::YZ:
+                if (corrType == 'X') return false;
+                if (fAlmostEqual(angle, 0) || fAlmostEqual(angle, M_PI)) {
+                    return corrType == 'Z';
+                }
+                if (fAlmostEqual(angle, M_PI/2) || fAlmostEqual(angle, 3 * M_PI/2)) {
+                    return corrType == 'Y';
+                }
+                return false;
+            default:
+                return false;
+        }
+    }
+
+    bool neighboringActivated(int u) {
+        std::vector<int> neighbors = graph.getNeighbors(u);
+        for (int n : graph.getNeighbors(u)) {
+            if (isActive(n)) return true;
+            if (wasDeactivated(n)) return true;
+        }
+        return false;
+    }
+
+    // Recompute which nodes are ready to be measured.
+    // A non-input, non-done node is ready when:
+    //   (a) all its flow-dependencies have been measured, OR
+    //   (b) all pending corrections on it are irrelevant for its basis, AND
+    //   (c) it is connected to already activated Nodes (only so the amount activated nodes / statevector size doesn't blow up) 
+    void recomputeReadyToMeasure(int u) {
+        
+        for (int node = 0; node < totalNodes; ++node) {
+            
+            if (isDone(node) || !neighboringActivated(node)) continue;
+
+            const auto& xDeps = Xdependencies[node];
+            const auto& zDeps = Zdependencies[node];
+
+            const bool noDeps = xDeps.empty() && zDeps.empty();
+
+            const bool selfOnlyDeps =
+                ((xDeps.size() == 1 && xDeps.count(node)) || xDeps.empty()) &&
+                ((zDeps.size() == 1 && zDeps.count(node)) || zDeps.empty());
+
+            const bool zCorrIrrel =
+                xDeps.empty() && correctionHasNoImpact(node, 'Z');
+
+            const bool xCorrIrrel =
+                zDeps.empty() && correctionHasNoImpact(node, 'X');
+
+            const bool yCorrIrrel =
+                Xdependencies == Zdependencies && correctionHasNoImpact(node, 'Y');  // When it is in corrf and Odd(corrf)  
+
+            if (noDeps || selfOnlyDeps || zCorrIrrel || xCorrIrrel || yCorrIrrel) {
+                readyToMeasure.insert(node);
+            }
+        }
+    }
+    
     
     
 public:
     Simulator() = default;
-    Simulator(const MBQC_Graph& g, const PauliFlowResult& flow, bool random = true, std::string inputState = "")
-        : graph(g.clone()), flow(flow), randomMeasurements(random), inputStateString(inputState)
+    Simulator(const MBQC_Graph& g, const PauliFlowResult& flow, bool random = true, std::string inputState = "", int maxVecSizeJSON = 128)
+        : graph(g.clone()), flow(flow), randomMeasurements(random), inputStateString(inputState), maxVecSizeJSON(maxVecSizeJSON)
     {
         if (!flow.ok) {
             std::cerr << "Cannot create simulator from bad pauli flow!\n";
@@ -138,24 +243,20 @@ public:
         // Build reverse flow dependencies
         for (const auto& [node, deps] : flow.corrf) {
             for (int dep : deps) {
-                dependencies[dep].insert(node);
+                Xdependencies[dep].insert(node);
             }
         }
-
-        // Also include reverse dependencies from oddNCorrf
         for (const auto& [node, deps] : flow.oddNcorrf) {
             for (int dep : deps) {
-                dependencies[dep].insert(node);
-            }
-        }
-        
-        for (int node = 0; node < totalNodes; ++node) {
-            if (dependencies[node].empty() ||
-                (dependencies[node].size() == 1 && dependencies[node].count(node) == 1)) {  // dependency is only the node itself
-                readyToMeasure.insert(node);
+                Zdependencies[dep].insert(node);
             }
         }
 
+        // Start by making the inputs readyToMeasure
+        for (int i : graph.getInputs()) {
+            readyToMeasure.insert(i);
+        } 
+        
         activateAllNecessary();
 
     }
@@ -178,7 +279,11 @@ public:
         j["readyToMeasure"] = readyToMeasure;
         j["measured"] = measured;
         j["outcomes"] = measurementOutcomes;
-        j["statevector"] = statevectorSimulator.toJson();
+        if (1 << statevectorSimulator.get_num_qubits() > maxVecSizeJSON) {
+            j["statevector"] = {};
+        } else {
+            j["statevector"] = statevectorSimulator.toJson();
+        }
         j["activeEdges"] = activeEdges;
         
         // The reverse of qubitToGraph has already the right order of statevecotr
@@ -253,6 +358,14 @@ public:
 
     void activateEdge(int u, int v) {
         if (isEdgeActive(u, v)) return;
+        if (!isActive(u)) {
+            std::cerr << "Simulator: Edge cannot be activated as node " << u << " is not Activated.\n";
+            return;
+        }
+        if (!isActive(v)) {
+            std::cerr << "Simulator: Edge cannot be activated as node " << v << " is not Activated.\n";
+            return;
+        }
         statevectorSimulator.CZ(graphNodeToQubit(u), graphNodeToQubit(v));
         activeEdges.insert({u,v});
     }
@@ -260,6 +373,7 @@ public:
     // Activates all necessary nodes based on the readyToMEasure
     void activateAllNecessary() {
         for (int r : readyToMeasure) {
+            activateNode(r);
             for (int n : graph.getNeighbors(r)) {
                 activateNode(n);
                 activateEdge(r, n);
@@ -338,20 +452,15 @@ public:
         }
 
         // Update dependencies of other nodes
-        for (auto& [node, deps] : dependencies) {
+        for (auto& [node, deps] : Xdependencies) {
+            deps.erase(nodeId);
+        }
+        for (auto& [node, deps] : Zdependencies) {
             deps.erase(nodeId);
         }
 
         // Recompute ready nodes
-        for (int node = 0; node < totalNodes; ++node) {
-            if (graph.isInput(node) || isDone(node)) {
-                continue;
-            }
-            if (dependencies[node].empty() ||
-                (dependencies[node].size() == 1 && dependencies[node].count(node) == 1)) {  // dependency is only the node itself
-                readyToMeasure.insert(node);
-            }
-        }
+        recomputeReadyToMeasure(nodeId);
 
         activateAllNecessary();
 

@@ -42,6 +42,7 @@ public:
     std::pair<MeasurementBasis, double> getMeasurement(int node) const;
     
     void printGraph() const;
+    std::string stateHash() const;
 
     MBQC_Graph clone() const;
 
@@ -57,9 +58,15 @@ public:
     void pivot(int u, int v);
     void ZInsertion(const std::vector<int>& inputVertices);
     void ZDeletion(int u);
+    void ZDeletion(std::vector<int> nodes);
     void relabel(int u);
     void relabelPlanar(int u, MeasurementBasis preferredBasis);
     void relabelPlanar(int u);
+    void mergeYZ(int u, int v);
+
+    // Simplification:
+    void simplify(int maxIterations = 1000);
+    bool mergeAllYZNodes();
 
     // FLOW
     std::vector<int> getNonOutputs() const;

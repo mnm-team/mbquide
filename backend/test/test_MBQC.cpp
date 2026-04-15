@@ -481,6 +481,65 @@ TEST_CASE("Test ZInsertion and ZDeletion") {
         CHECK(compareTensors(MBQCtoZXGraph(graph), MBQCtoZXGraph(original)));
 
     }
+
+    SUBCASE("Multi ZDeletion - independent nodes") {
+        MBQC_Graph graph(8, {0, 1}, {7});
+        graph.addEdge(0, 2);
+        graph.addEdge(1, 3);
+        graph.addEdge(2, 3);
+        graph.addEdge(3, 4);
+        graph.addEdge(4, 5);
+        graph.addEdge(5, 6);
+        graph.addEdge(6, 7);
+        graph.setMeasurement(0, MeasurementBasis::X);
+        graph.setMeasurement(1, MeasurementBasis::X);
+        graph.setMeasurement(2, MeasurementBasis::XY, 2.03813);
+        graph.setMeasurement(3, MeasurementBasis::YZ, 1.97273);
+        graph.setMeasurement(4, MeasurementBasis::Z, 0);
+        graph.setMeasurement(5, MeasurementBasis::Z, 0);
+        graph.setMeasurement(6, MeasurementBasis::YZ, 1.97273);
+        MBQC_Graph original = graph.clone();
+
+        // Delete both Z nodes at once vs one at a time — results must match
+        MBQC_Graph graphMulti = graph.clone();
+        graphMulti.ZDeletion(std::vector<int>{4, 5});
+        CHECK(graphMulti.getSize() == 6);
+        CHECK(graphMulti.getAdjacencyMatrix().size() == 6);
+        CHECK(compareTensors(MBQCtoZXGraph(graphMulti), MBQCtoZXGraph(original)));
+
+        // Sequential single deletions for cross-check (delete 5 first to avoid shift)
+        MBQC_Graph graphSeq = graph.clone();
+        graphSeq.ZDeletion(5);
+        graphSeq.ZDeletion(4);
+        CHECK(compareTensors(MBQCtoZXGraph(graphMulti), MBQCtoZXGraph(graphSeq)));
+    }
+
+    SUBCASE("Multi ZDeletion - index shifting correctness") {
+        // Nodes 1 and 3 are Z-nodes; deleting {1, 3} means after deleting 3 first,
+        // node 1 is still at index 1 — verifies descending sort handles shifts correctly
+        MBQC_Graph graph(5, {0}, {4});
+        graph.addEdge(0, 1);
+        graph.addEdge(1, 2);
+        graph.addEdge(2, 3);
+        graph.addEdge(3, 4);
+        graph.setMeasurement(0, MeasurementBasis::X);
+        graph.setMeasurement(1, MeasurementBasis::Z, M_PI);  // Z node to delete
+        graph.setMeasurement(2, MeasurementBasis::XY, 1.2);
+        graph.setMeasurement(3, MeasurementBasis::Z, 0);     // Z node to delete
+        MBQC_Graph original = graph.clone();
+
+        MBQC_Graph graphMulti = graph.clone();
+        graphMulti.ZDeletion(std::vector<int>{1, 3});
+        CHECK(graphMulti.getSize() == 3);
+        CHECK(graphMulti.getAdjacencyMatrix().size() == 3);
+        CHECK(compareTensors(MBQCtoZXGraph(graphMulti), MBQCtoZXGraph(original)));
+
+        // Cross-check against sequential deletions in descending order
+        MBQC_Graph graphSeq = graph.clone();
+        graphSeq.ZDeletion(3);
+        graphSeq.ZDeletion(1);
+        CHECK(compareTensors(MBQCtoZXGraph(graphMulti), MBQCtoZXGraph(graphSeq)));
+    }
     
 }
 

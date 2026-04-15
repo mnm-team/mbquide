@@ -22,3 +22,9 @@ export const GLOW_INTENSITY = {
   SELECTED_INNER: 2,
   SELECTED_OUTER: 10,
 } as const;
+
+export const OUTPUT_TABLE = {
+  X_OFFSET: 30,
+  Y_OFFSET: -30,
+  FONT_SIZE: 13,
+} as const;

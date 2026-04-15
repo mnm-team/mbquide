@@ -5,7 +5,7 @@ export const applyNodeInteractions = (
   node: d3.Selection<SVGGElement, NodeType, SVGGElement, unknown>,
   setSelectedNodes: (nodes: NodeType[]) => void,
   onSelectionChange?: (selected: NodeType[]) => void,
-  onNodeDelete?: (node?: NodeType) => void,
+  onNodeDelete?: (nodes?: NodeType[]) => void,
   setContextMenu?: (menu: ContextMenuState) => void,
   buildingMode?: boolean,
   onNodeDoubleClick?: (node: NodeType) => void,
@@ -46,11 +46,14 @@ export const applyNodeInteractions = (
             if (event.button === 1) {
                 event.preventDefault();
                 event.stopPropagation();
-                if (onNodeDelete) onNodeDelete(d);
+                if (onNodeDelete) onNodeDelete([d]);
             }
         });
 
-        node.on("contextmenu", null);
+        node.on("contextmenu", function (event, d) {
+            setSelectedNodes([d]);
+            if (onSelectionChange) onSelectionChange([d]);
+        });
 
     // NO BUILD MODE
     } else {

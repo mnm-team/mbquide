@@ -1,6 +1,52 @@
 import React from "react";
 
 
+type NumberButtonProps = {
+  onClick?: () => void;
+  label: string;
+  disabled?: boolean;
+};
+
+export function NumberButton({ onClick, label, disabled }: NumberButtonProps) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="
+        group relative
+        w-14 h-14
+        disabled:opacity-50 disabled:cursor-not-allowed
+      "
+      style={{ cursor: disabled ? "not-allowed" : "pointer" }}
+    >
+      <div
+        className="
+          flex items-center justify-center
+          w-full h-full
+          border border-gray-200 bg-white
+          rounded-lg
+          text-gray-800 text-lg font-medium
+
+          transition-all duration-200 ease-out
+
+          group-hover:border-blue-400
+          group-hover:bg-blue-50
+          group-hover:text-blue-700
+          group-hover:shadow-sm
+
+          active:scale-[0.97]
+          active:bg-blue-100
+
+          disabled:bg-gray-50 disabled:border-gray-200 disabled:text-gray-400
+        "
+      >
+        {label}
+      </div>
+    </button>
+  );
+}
+
+
 type ActionButtonProps = {
   onClick?: () => void;
   disabled?: boolean;

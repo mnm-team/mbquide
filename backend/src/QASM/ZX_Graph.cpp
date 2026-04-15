@@ -114,113 +114,100 @@ std::vector<int> ZXGraph::getOutputs() const {
     return outs;
 }
 
-ZXGraph ZXGraph::fromQuantumCircuit(const QuantumCircuit& qc) {    
+
+ZXGraph ZXGraph::fromQuantumCircuit(const QuantumCircuit& qc) {
     ZXGraph zx;
     std::vector<int> wire_end(qc.num_qubits, -1);
 
-    for (int q = 0; q < qc.num_qubits; ++q) {
-        int input = zx.addSpider(SpiderType::INPUT);
-        wire_end[q] = input;
-    }
+    for (int q = 0; q < qc.num_qubits; ++q)
+        wire_end[q] = zx.addSpider(SpiderType::INPUT);
+
+    // Helper: append a single spider on qubit q, return new node id
+    auto appendSpider = [&](int q, SpiderType type, double phase = 0.0) {
+        int node = zx.addSpider(type, phase);
+        zx.addEdge(wire_end[q], node);
+        wire_end[q] = node;
+        return node;
+    };
+
+    // Helper: append a single spider with a Hadamard edge on qubit q
+    auto appendSpiderH = [&](int q, SpiderType type, double phase = 0.0) {
+        int node = zx.addSpider(type, phase);
+        zx.addEdge(wire_end[q], node, EdgeType::HADAMARD);
+        wire_end[q] = node;
+        return node;
+    };
+
+    // Helper: build the shared CCZ interior (given already-placed zc1, zc2, zt nodes)
+    auto buildCCZInterior = [&](int zc1, int zc2, int zt) {
+        auto addAncilla = [&](double angle, std::initializer_list<int> neighbors) {
+            int z     = zx.addSpider(SpiderType::Z);
+            int za    = zx.addSpider(SpiderType::Z, angle);
+            zx.addEdge(z, za, EdgeType::HADAMARD);
+            for (int n : neighbors)
+                zx.addEdge(n, z, EdgeType::HADAMARD);
+        };
+        addAncilla(7 * M_PI / 4, {zc1, zt});
+        addAncilla(7 * M_PI / 4, {zc2, zt});
+        addAncilla(7 * M_PI / 4, {zc1, zc2});
+        addAncilla(    M_PI / 4, {zc1, zc2, zt});
+    };
 
     for (const auto& gate : qc.gates) {
-
         std::string op = gate.name;
         std::transform(op.begin(), op.end(), op.begin(), ::tolower);
 
-        if (op == "h") {
-            int q = gate.qubits[0];
-            int z = zx.addSpider(SpiderType::Z);
-            zx.addEdge(wire_end[q], z, EdgeType::HADAMARD);
-            wire_end[q] = z;
+        if      (op == "h")              appendSpiderH(gate.qubits[0], SpiderType::Z);
+        else if (op == "x")              appendSpider (gate.qubits[0], SpiderType::X, M_PI);
+        else if (op == "z")              appendSpider (gate.qubits[0], SpiderType::Z, M_PI);
+        else if (op == "s")              appendSpider (gate.qubits[0], SpiderType::Z,  M_PI/2);
+        else if (op == "sdag"||op=="sdg")appendSpider (gate.qubits[0], SpiderType::Z, -M_PI/2);
+        else if (op == "t")              appendSpider (gate.qubits[0], SpiderType::Z,  M_PI/4);
+        else if (op == "tdag"||op=="tdg")appendSpider (gate.qubits[0], SpiderType::Z, -M_PI/4);
+        else if (op == "rz")             appendSpider (gate.qubits[0], SpiderType::Z, gate.params[0]);
+        else if (op == "rx")             appendSpider (gate.qubits[0], SpiderType::X, gate.params[0]);
 
-        } else if (op == "x") {
+        else if (op == "y" || op == "ry") {
             int q = gate.qubits[0];
-            int x = zx.addSpider(SpiderType::X, M_PI);
-            zx.addEdge(wire_end[q], x);
-            wire_end[q] = x;
+            double theta = (op == "ry") ? gate.params[0] : M_PI;
+            appendSpider(q, SpiderType::Z,  M_PI/2);
+            appendSpider(q, SpiderType::X, theta);
+            appendSpider(q, SpiderType::Z, -M_PI/2);
 
-        } else if (op == "z") {
-            int q = gate.qubits[0];
-            int z = zx.addSpider(SpiderType::Z, M_PI);
-            zx.addEdge(wire_end[q], z);
-            wire_end[q] = z;
-
-        } else if (op == "y") {
-
-            int q = gate.qubits[0];
-            double theta = gate.params[0];
-            int z1 = zx.addSpider(SpiderType::Z, M_PI/2);
-            int x = zx.addSpider(SpiderType::X, M_PI);
-            int z2 = zx.addSpider(SpiderType::Z, -M_PI/2);
-            
-            zx.addEdge(wire_end[q], z1);
-            zx.addEdge(z1, x);
-            zx.addEdge(x, z2);
-            wire_end[q] = z2;
-
-        } else if (op == "rz") {
-            int q = gate.qubits[0];
-            double theta = gate.params[0];
-            int z = zx.addSpider(SpiderType::Z, theta);
-            zx.addEdge(wire_end[q], z);
-            wire_end[q] = z;
-
-        } else if (op == "rx") {
-            int q = gate.qubits[0];
-            double theta = gate.params[0];
-            int x = zx.addSpider(SpiderType::X, theta);
-            zx.addEdge(wire_end[q], x);
-            wire_end[q] = x;
-
-            
-        } else if (op == "ry") {
-            int q = gate.qubits[0];
-            double theta = gate.params[0];
-            int z1 = zx.addSpider(SpiderType::Z, M_PI/2);
-            int x = zx.addSpider(SpiderType::X, theta);
-            int z2 = zx.addSpider(SpiderType::Z, -M_PI/2);
-            
-            zx.addEdge(wire_end[q], z1);
-            zx.addEdge(z1, x);
-            zx.addEdge(x, z2);
-            wire_end[q] = z2;
-            
         } else if (op == "cx") {
-            int c = gate.qubits[0], t = gate.qubits[1];
             int z = zx.addSpider(SpiderType::Z);
             int x = zx.addSpider(SpiderType::X);
             zx.addEdge(z, x);
-            zx.addEdge(wire_end[c], z);
-            zx.addEdge(wire_end[t], x);
-            wire_end[c] = z;
-            wire_end[t] = x;
+            zx.addEdge(wire_end[gate.qubits[0]], z); wire_end[gate.qubits[0]] = z;
+            zx.addEdge(wire_end[gate.qubits[1]], x); wire_end[gate.qubits[1]] = x;
 
         } else if (op == "cz") {
-            int q0 = gate.qubits[0], q1 = gate.qubits[1];
             int z1 = zx.addSpider(SpiderType::Z);
             int z2 = zx.addSpider(SpiderType::Z);
             zx.addEdge(z1, z2, EdgeType::HADAMARD);
-            zx.addEdge(wire_end[q0], z1);
-            zx.addEdge(wire_end[q1], z2);
-            wire_end[q0] = z1;
-            wire_end[q1] = z2;
+            zx.addEdge(wire_end[gate.qubits[0]], z1); wire_end[gate.qubits[0]] = z1;
+            zx.addEdge(wire_end[gate.qubits[1]], z2); wire_end[gate.qubits[1]] = z2;
 
-        } else if (op == "s") {
-            int q = gate.qubits[0];
-            int s = zx.addSpider(SpiderType::Z, M_PI/2);
-            zx.addEdge(wire_end[q], s);
-            wire_end[q] = s;
+        } else if (op == "ccz" || op == "ccx") {
+            int c1 = gate.qubits[0], c2 = gate.qubits[1], t = gate.qubits[2];
 
-        } else if (op == "-s") {
-            int q = gate.qubits[0];
-            int s = zx.addSpider(SpiderType::Z, -M_PI/2);
-            zx.addEdge(wire_end[q], s);
-            wire_end[q] = s;
+            int zc1 = appendSpider(c1, SpiderType::Z, M_PI/4);
+            int zc2 = appendSpider(c2, SpiderType::Z, M_PI/4);
+            int zt  = (op == "ccz")
+                ? appendSpider (t, SpiderType::Z, M_PI/4)
+                : appendSpiderH(t, SpiderType::Z, M_PI/4);
+
+            buildCCZInterior(zc1, zc2, zt);
+
+            if (op == "ccx") {
+                // close the H-sandwich around target
+                int h_end = zx.addSpider(SpiderType::Z);
+                zx.addEdge(zt, h_end, EdgeType::HADAMARD);
+                wire_end[t] = h_end;
+            }
 
         } else if (op == "measure") {
             continue;
-
         } else {
             std::cerr << "Unsupported gate: " << gate.name << "\n";
         }
