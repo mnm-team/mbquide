@@ -2,9 +2,10 @@ import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { executeAPIOperation } from "../apps/MBQC/api/graphApi";
 import {
-  createTransformToZXOperation,
+  createTransformToMBQCOperation,
   createSimulateOperation,
   createGetFlowOperation,
+  createSimplifyOperation,
 } from "../apps/MBQC/api/operations";
 
 import { ActionButton, ExampleButton } from "./Buttons";
@@ -43,7 +44,7 @@ export function QASMControls({ qasmInput, setQasmInput }: Props) {
       setLoading(true);
       setError(null);
       await executeAPIOperation("qasm", { qasm: qasmInput });
-      await executeAPIOperation("qasm", createTransformToZXOperation());
+      await executeAPIOperation("qasm", createTransformToMBQCOperation());
       navigate("/MBQC");
     } catch (err: any) {
       setError("Failed to generate MBQC diagram.");
@@ -57,7 +58,8 @@ export function QASMControls({ qasmInput, setQasmInput }: Props) {
       setLoading(true);
       setError(null);
       await executeAPIOperation("qasm", { qasm: qasmInput });
-      await executeAPIOperation("qasm", createTransformToZXOperation());
+      await executeAPIOperation("qasm", createTransformToMBQCOperation());
+      await executeAPIOperation("graph", createSimplifyOperation());
       await executeAPIOperation("graph", createGetFlowOperation());
       await executeAPIOperation("graph", createSimulateOperation());
       navigate("/SIM");

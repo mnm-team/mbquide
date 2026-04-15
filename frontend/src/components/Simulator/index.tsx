@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { SimulatorGraphProps, NodeType } from './types';
 import { useSimulatorRendering } from './hooks/useSimulatorRendering';
-import { SimulatorOutputTable } from './ui/OutputTable';
 
 export default function MBQC_Simulator({
   nodes: mainNodes,
@@ -20,7 +19,7 @@ export default function MBQC_Simulator({
 }: SimulatorGraphProps) {
   const [selectedNodes, setSelectedNodes] = useState<NodeType[]>([]);
 
-  const { svgRef, panOffset } = useSimulatorRendering({
+  const { svgRef } = useSimulatorRendering({
     mainNodes,
     edges,
     inputs,

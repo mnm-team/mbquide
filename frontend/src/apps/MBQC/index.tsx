@@ -19,7 +19,7 @@ import {
   createRelabelingPlanarOperation,
   createGetFlowOperation,
   createFocusFlowOperation,
-  createTransformToZXOperation,
+  createTransformToMBQCOperation,
   createSimulateOperation,
   createSimplifyOperation,
 } from './api/operations';
@@ -215,7 +215,7 @@ export default function MBQC_App() {
   }, [selectedNodes, runGraphOperation]);
 
   const handleTransformToZX = useCallback(async () => {
-    await runGraphOperation(createTransformToZXOperation());
+    await runGraphOperation(createTransformToMBQCOperation());
     navigate('/ZX');
   }, [runGraphOperation, navigate]);
 
