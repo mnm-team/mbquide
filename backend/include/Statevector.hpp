@@ -54,6 +54,12 @@ private:
         size_t start = trimmed.find_first_not_of(" 	");
         size_t end = trimmed.find_last_not_of(" 	");
         if (start != std::string::npos) trimmed = trimmed.substr(start, end - start + 1);
+        
+        trimmed.erase(
+            std::remove_if(trimmed.begin(), trimmed.end(),
+                        [](unsigned char c){ return std::isspace(c); }),
+            trimmed.end()
+        );
 
         if (trimmed.empty() || trimmed == "0") return cplx(0.0, 0.0);
 
