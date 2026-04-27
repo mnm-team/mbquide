@@ -24,6 +24,7 @@ private:
     int totalNodes;
     int numInputNodes;
     int maxVecSizeJSON;
+    bool conveyorBelt;
     std::string inputStateString;
     StatevectorSimulator statevectorSimulator;
 
@@ -218,11 +219,12 @@ private:
     }
     
     
+
     
 public:
     Simulator() = default;
-    Simulator(const MBQC_Graph& g, const PauliFlowResult& flow, bool random = true, std::string inputState = "", int maxVecSizeJSON = 128)
-        : graph(g.clone()), flow(flow), randomMeasurements(random), inputStateString(inputState), maxVecSizeJSON(maxVecSizeJSON)
+    Simulator(const MBQC_Graph& g, const PauliFlowResult& flow, bool random = true, std::string inputState = "", int maxVecSizeJSON = 128, bool conveyorBelt = true)
+        : graph(g.clone()), flow(flow), randomMeasurements(random), inputStateString(inputState), maxVecSizeJSON(maxVecSizeJSON), conveyorBelt(conveyorBelt)
     {
         if (!flow.ok) {
             std::cerr << "Cannot create simulator from bad pauli flow!\n";
@@ -257,7 +259,7 @@ public:
             readyToMeasure.insert(i);
         } 
         
-        activateAllNecessary();
+        conveyorBelt ? activateAllNecessary() : activateAll();
 
     }
 
@@ -370,6 +372,17 @@ public:
         activeEdges.insert({u,v});
     }
 
+    // Activates ALL nodes and edges
+    void activateAll() {
+        for (int r = 0; r < totalNodes; r++) {
+            activateNode(r);
+            for (int n : graph.getNeighbors(r)) {
+                activateNode(n);
+                activateEdge(r, n);
+            }
+        }
+    }
+
     // Activates all necessary nodes based on the readyToMEasure
     void activateAllNecessary() {
         for (int r : readyToMeasure) {
@@ -462,7 +475,7 @@ public:
         // Recompute ready nodes
         recomputeReadyToMeasure(nodeId);
 
-        activateAllNecessary();
+        if (conveyorBelt) activateAllNecessary();
 
         return true;
     }

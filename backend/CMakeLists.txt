@@ -14,7 +14,6 @@ FetchContent_Declare(
     GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
     GIT_TAG 5.0.0
 )
-
 FetchContent_MakeAvailable(eigen)
 
 # -----------------------------
@@ -25,10 +24,8 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/chriskohlhoff/asio.git
     GIT_TAG asio-1-38-0
 )
-
 FetchContent_MakeAvailable(asio)
 
-# Create interface target for standalone Asio
 add_library(asio INTERFACE)
 target_include_directories(asio INTERFACE ${asio_SOURCE_DIR}/asio/include)
 
@@ -40,8 +37,17 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/nlohmann/json.git
     GIT_TAG v3.11.3
 )
-
 FetchContent_MakeAvailable(nlohmann_json)
+
+# -----------------------------
+# doctest
+# -----------------------------
+FetchContent_Declare(
+    doctest
+    GIT_REPOSITORY https://github.com/doctest/doctest.git
+    GIT_TAG v2.4.11
+)
+FetchContent_MakeAvailable(doctest)
 
 # -----------------------------
 # Boost
@@ -49,17 +55,14 @@ FetchContent_MakeAvailable(nlohmann_json)
 find_package(Boost REQUIRED COMPONENTS graph)
 
 # -----------------------------
-# Server executable
+# Core library (shared by server + tests)
 # -----------------------------
-add_executable(Server)
+add_library(mbquide_core)
 
-file(GLOB serverHeaders
-     "include/*.h"
-)
+file(GLOB serverHeaders "include/*.h")
 
-target_sources(Server
+target_sources(mbquide_core
  PRIVATE
-   src/server.cpp
    src/utils.cpp
    src/graph/Flow.cpp
    src/graph/MBQC_Graph.cpp
@@ -75,13 +78,28 @@ target_sources(Server
    FILES ${serverHeaders}
 )
 
-# -----------------------------
-# Link dependencies
-# -----------------------------
-target_link_libraries(Server
-PRIVATE
+target_link_libraries(mbquide_core
+PUBLIC
     Eigen3::Eigen
     Boost::graph
     asio
     nlohmann_json::nlohmann_json
 )
+
+target_include_directories(mbquide_core PUBLIC include)
+
+# -----------------------------
+# Server executable
+# -----------------------------
+add_executable(Server src/server.cpp)
+
+target_link_libraries(Server
+PRIVATE
+    mbquide_core
+)
+
+# -----------------------------
+# Tests
+# -----------------------------
+enable_testing()
+add_subdirectory(test)

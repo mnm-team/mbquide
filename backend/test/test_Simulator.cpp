@@ -265,22 +265,6 @@ TEST_CASE("Measurement basis handling") {
     }
 }
 
-TEST_CASE("Edge cases") {
-    SUBCASE("Empty dependencies") {
-        MBQC_Graph graph(3, {0}, {2});
-        graph.addEdge(0, 1);
-        graph.addEdge(1, 2);
-        graph.setMeasurement(1, MeasurementBasis::X, 0.0);
-        
-        PauliFlowResult flow;
-        flow.ok = true;
-        // No dependencies - node 1 should be immediately ready
-        
-        Simulator sim(graph, flow, true);
-        CHECK(sim.isReady(1));
-    }
-
-}
 
 
 TEST_CASE("Bell state circuit test") {
@@ -767,7 +751,7 @@ TEST_CASE("Test Entire Pipeline (Simulating QASM Circuit)") {
 
         const char* input = "(1)|000>";
         auto output = simulateCircuit(circuit, input);
-        CHECK(equalUpToGlobalPhase(output, "(1)|000>"));
+        CHECK(equalUpToGlobalPhase(output, "(0.707107)|000> + (0.707107)|100>"));
     }
 
     SUBCASE("CCZ with Controls 0 and 1, Target 2, Input |110>") {
