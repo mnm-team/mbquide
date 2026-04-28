@@ -64,8 +64,8 @@ export default function QASMInputApp() {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden">
-      <div className="flex flex-1 flex-col min-w-0">
-        <div className="flex-[2] p-[30px] z-10">
+      <div className="flex h-full flex-1 flex-col min-w-0">
+        <div className="flex-[1] p-[30px] z-10">
           <h1 className="pb-5">Enter your QASM program</h1>
           <textarea
             rows={10}
@@ -76,7 +76,7 @@ export default function QASMInputApp() {
           />
         </div>
 
-        <div className="flex-1 p-[30px] flex flex-col min-h-0">
+        <div className="flex-[3] p-[30px] flex flex-col min-h-0">
           <div className="flex-1 overflow-auto min-h-0">
             <div className="flex justify-center items-center min-h-full min-w-full">
               <div
@@ -92,13 +92,8 @@ export default function QASMInputApp() {
               )}
             </div>
           </div>
-          <p>
-            Powered by{" "}
-            <a target="_blank" href="https://github.com/quantastica/quantum-circuit">
-              Quantastica quantum-circuit
-            </a>
-          </p>
         </div>
+
       </div>
 
       {/* Controls */}

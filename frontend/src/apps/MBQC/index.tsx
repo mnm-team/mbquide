@@ -19,7 +19,6 @@ import {
   createRelabelingPlanarOperation,
   createGetFlowOperation,
   createFocusFlowOperation,
-  createTransformToMBQCOperation,
   createSimulateOperation,
   createSimplifyOperation,
 } from './api/operations';
@@ -213,11 +212,6 @@ export default function MBQC_App() {
     if (selectedNodes.length !== 1) return;
     runGraphOperation(createRelabelingPlanarOperation(selectedNodes[0].id, basis));
   }, [selectedNodes, runGraphOperation]);
-
-  const handleTransformToZX = useCallback(async () => {
-    await runGraphOperation(createTransformToMBQCOperation());
-    navigate('/ZX');
-  }, [runGraphOperation, navigate]);
 
   const handleSimulate = useCallback(async () => {
     await runGraphOperation(createSimulateOperation());
@@ -514,7 +508,6 @@ export default function MBQC_App() {
           fitForRelabeling: fitForRelabeling(),
           areNonPlanar: areNonPlanar(),
           simplifyGraphDisabled: !canSimplify(),
-          onTransformToZX: handleTransformToZX,
           onGetFlow: handleGetFlow,
           onFocusFlow: handleFocusFlow,
           onSimulate: handleSimulate,

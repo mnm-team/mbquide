@@ -2,7 +2,6 @@ import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { executeAPIOperation } from "../apps/MBQC/api/graphApi";
 import {
-  createTransformToMBQCOperation,
   createSimulateOperation,
   createGetFlowOperation,
   createSimplifyOperation,
@@ -44,7 +43,6 @@ export function QASMControls({ qasmInput, setQasmInput }: Props) {
       setLoading(true);
       setError(null);
       await executeAPIOperation("qasm", { qasm: qasmInput });
-      await executeAPIOperation("qasm", createTransformToMBQCOperation());
       navigate("/MBQC");
     } catch (err: any) {
       setError("Failed to generate MBQC diagram.");
@@ -58,7 +56,6 @@ export function QASMControls({ qasmInput, setQasmInput }: Props) {
       setLoading(true);
       setError(null);
       await executeAPIOperation("qasm", { qasm: qasmInput });
-      await executeAPIOperation("qasm", createTransformToMBQCOperation());
       await executeAPIOperation("graph", createSimplifyOperation());
       await executeAPIOperation("graph", createGetFlowOperation());
       await executeAPIOperation("graph", createSimulateOperation());
@@ -102,14 +99,6 @@ export function QASMControls({ qasmInput, setQasmInput }: Props) {
           </div>
 
           <div className="flex flex-col gap-2.5">
-            <ActionButton
-              onClick={toZX}
-              disabled={!qasmInput}
-              label="ZX Diagram"
-              sublabel="Transform the Circuit to ZX"
-              icon={<ZXIcon />}
-              arrow={true}
-            />
             <ActionButton
               onClick={toMBQC}
               disabled={!qasmInput}

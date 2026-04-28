@@ -7,6 +7,7 @@ using json = nlohmann::json;
 #include "QASM_Parser.hpp"
 #include "ZX2MBQC.hpp"
 #include "MBQC2ZX.hpp"
+#include "Circ2MBQC.hpp"
 #include "Flow.hpp"
 #include "OutputAdjustments.hpp"
 #include "Simulator.hpp"
@@ -257,9 +258,9 @@ int main() {
     CROW_ROUTE(app, "/api/qasm").methods(crow::HTTPMethod::Get)
     ([](const crow::request& req) {
         SessionInfo session = get_session_id(req);
-        ZXGraph& zx = get_zx_for_session(session.id);
+        MBQC_Graph& g = get_graph_for_session(session.id);
         
-        json j = zx.toJson();
+        json j = g.toJson();
 
         crow::response res{j.dump()};
         res.set_header("Content-Type", "application/json");
@@ -272,7 +273,7 @@ int main() {
     CROW_ROUTE(app, "/api/qasm").methods(crow::HTTPMethod::Post)
     ([](const crow::request& req){
         SessionInfo session = get_session_id(req);
-        ZXGraph& zx = get_zx_for_session(session.id);
+        MBQC_Graph& g = get_graph_for_session(session.id);
         crow::response res;
 
         try {
@@ -284,29 +285,16 @@ int main() {
                 
                 QASMParser parser("", qasmText);
                 QuantumCircuit qc = parser.parse();
-                zx = ZXGraph::fromQuantumCircuit(qc);
+                g = CIRCtoMBQCGraph(qc);
                 
-                json reply = zx.toJson();
+                json reply = g.toJson();
                 
                 res.code = 200;
                 res.set_header("Content-Type", "application/json");
                 res.write(reply.dump());   
 
-            } else if (j.contains("transform")) {
-                MBQC_Graph& graph = get_graph_for_session(session.id);
-
-                graph = ZXtoMBQCGraph(zx);
-                
-                json reply = graph.toJson();
-
-                res.code = 200;
-                res.set_header("Content-Type", "application/json");
-                if (session.is_new) {
-                    res.add_header("Set-Cookie", "session_id=" + session.id + "; Path=/; HttpOnly; Max-Age=86400; SameSite=None; Secure");
-                }
-                res.write(reply.dump());
             } else {
-                throw std::runtime_error("Missing field: qasm or transform");
+                throw std::runtime_error("Missing field: qasm");
             }
             
         } catch (const std::exception& e) {
