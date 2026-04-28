@@ -492,7 +492,10 @@ void MBQC_Graph::relabel(int u) {
     }
     
     angle_u = normalize_radians(angle_u);
-    if (!fAlmostEqual(fmod(angle_u, M_PI/2), 0)) {
+    if (!(fAlmostEqual(angle_u, 0) ||
+          fAlmostEqual(angle_u, M_PI/2) ||
+          fAlmostEqual(angle_u, M_PI) ||
+          fAlmostEqual(angle_u, 3*M_PI/2))) {
         std::cerr << "Relabeling: node " << u << " has angle " << radiansToString(angle_u) << " and thus not 0, pi/2, pi or 3pi/2\n";
         return;
     }
