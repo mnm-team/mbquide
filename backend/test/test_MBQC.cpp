@@ -5,6 +5,7 @@
 #include "ZX_Graph.hpp"
 #include "ZX2MBQC.hpp"
 #include "MBQC2ZX.hpp"
+#include "Circ2MBQC.hpp"
 #include "QASM_Parser.hpp"
 #include "Quantum_Circuit.hpp"
 #include "Flow.hpp"
@@ -217,6 +218,114 @@ TEST_CASE("QASM -> Circuit -> ZX -> MBQC -> ZX") {
 
 
 }
+
+
+TEST_CASE("Circuit -> ZX vs. Circuit -> MBQC -> ZX") {
+
+    SUBCASE("Coin Toss Circuit") {
+        const char* qasm_text = R"qasm(
+            OPENQASM 2.0;
+            qreg q[1];
+            h q[0];
+        )qasm";
+
+        QASMParser qasm = QASMParser("", qasm_text);
+        QuantumCircuit circ = qasm.parse();
+
+        ZXGraph originalZX = ZXGraph::fromQuantumCircuit(circ);
+        MBQC_Graph mbqc = CIRCtoMBQCGraph(circ);
+        mbqc.simplify();
+        ZXGraph newZX = MBQCtoZXGraph(mbqc);
+
+        CHECK(mbqc.getInputs().size() == 1);
+        CHECK(compareTensors(newZX, originalZX));
+    }
+
+    SUBCASE("Bell State Circuit") {
+        const char* qasm_text = R"qasm(
+            OPENQASM 2.0;
+            qreg q[2];
+            h q[0];
+            cx q[0],q[1];
+        )qasm";
+
+        QASMParser qasm = QASMParser("", qasm_text);
+        QuantumCircuit circ = qasm.parse();
+
+        ZXGraph originalZX = ZXGraph::fromQuantumCircuit(circ);
+        MBQC_Graph mbqc = CIRCtoMBQCGraph(circ);
+        ZXGraph newZX = MBQCtoZXGraph(mbqc);
+
+        CHECK(mbqc.getInputs().size() == 2);
+        CHECK(compareTensors(newZX, originalZX));
+    }
+
+    SUBCASE("Simple X Circuit") {
+        const char* qasm_text = R"qasm(
+            OPENQASM 2.0;
+            qreg q[1];
+            x q[0];
+        )qasm";
+
+        QASMParser qasm = QASMParser("", qasm_text);
+        QuantumCircuit circ = qasm.parse();
+
+        ZXGraph originalZX = ZXGraph::fromQuantumCircuit(circ);
+        MBQC_Graph mbqc = CIRCtoMBQCGraph(circ);
+        ZXGraph newZX = MBQCtoZXGraph(mbqc);
+
+        CHECK(compareTensors(newZX, originalZX));
+    }
+
+    SUBCASE("Simple H with two qubits") {
+        const char* qasm_text = R"qasm(
+            OPENQASM 2.0;
+            qreg q[2];
+            h q[1];
+        )qasm";
+
+        QASMParser qasm = QASMParser("", qasm_text);
+        QuantumCircuit circ = qasm.parse();
+
+        ZXGraph originalZX = ZXGraph::fromQuantumCircuit(circ);
+        MBQC_Graph mbqc = CIRCtoMBQCGraph(circ);
+        ZXGraph newZX = MBQCtoZXGraph(mbqc);
+
+        CHECK(compareTensors(newZX, originalZX));
+    }
+
+    SUBCASE("Simple X with three qubits") {
+        const char* qasm_text = R"qasm(
+            OPENQASM 2.0;
+            qreg q[3];
+            x q[0];
+        )qasm";
+
+        QASMParser qasm = QASMParser("", qasm_text);
+        QuantumCircuit circ = qasm.parse();
+
+        ZXGraph originalZX = ZXGraph::fromQuantumCircuit(circ);
+        MBQC_Graph mbqc = CIRCtoMBQCGraph(circ);
+        ZXGraph newZX = MBQCtoZXGraph(mbqc);
+
+        CHECK(compareTensors(newZX, originalZX));
+    }
+    
+    SUBCASE("Random Clifford Circuit - 2 qubits") {
+        std::string qasm_text = randomClifford(2, 5);
+
+        QASMParser qasm = QASMParser("", qasm_text);
+        QuantumCircuit circ = qasm.parse();
+
+        ZXGraph originalZX = ZXGraph::fromQuantumCircuit(circ);
+        MBQC_Graph mbqc = CIRCtoMBQCGraph(circ);
+        ZXGraph newZX = MBQCtoZXGraph(mbqc);
+
+        CHECK(compareTensors(newZX, originalZX));
+    }
+    
+}
+
 
 TEST_CASE("Test Relabeling") {
     
@@ -629,9 +738,10 @@ TEST_CASE("Test invalid graph operations") {
 
     // Test invalid edge
     graph.addEdge(0, 3);
-    CHECK(graph.getAdjacencyMatrix()[0][3] == 0);  // No edge should exist
+    CHECK(graph.getAllEdges().empty());  // No edge should exist
 
     // Test invalid measurement
+    CHECK(graph.getSize() == 3);
     std::cerr << "Ignore this setting node error - ";
     graph.setMeasurement(3, MeasurementBasis::Y, M_PI);
 }
@@ -742,7 +852,6 @@ TEST_CASE("Find Pauli Flow") {
         graph.setMeasurement(3, MeasurementBasis::YZ);
 
         // Run Pauli flow finder
-        std::cerr << "Ignore this 'no flow found' Info - ";
         PauliFlowResult result = findPauliFlow(graph);
 
         CHECK(!result.ok);

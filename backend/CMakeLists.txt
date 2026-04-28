@@ -47,7 +47,15 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/doctest/doctest.git
     GIT_TAG v2.4.11
 )
-FetchContent_MakeAvailable(doctest)
+FetchContent_GetProperties(doctest)
+if(NOT doctest_POPULATED)
+    FetchContent_Populate(doctest)
+endif()
+
+add_library(doctest INTERFACE)
+target_include_directories(doctest INTERFACE ${doctest_SOURCE_DIR}/doctest)
+
+add_library(doctest::doctest ALIAS doctest)
 
 # -----------------------------
 # Boost
@@ -69,7 +77,6 @@ target_sources(mbquide_core
    src/graph/OutputAdjustments.cpp
    src/QASM/MBQC2ZX.cpp
    src/QASM/QASM_Parser.cpp
-   src/QASM/Quantum_Circuit.cpp
    src/QASM/ZX2MBQC.cpp
    src/QASM/ZX_Graph.cpp
  PUBLIC

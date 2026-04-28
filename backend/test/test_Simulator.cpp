@@ -5,7 +5,7 @@
 #include "MBQC_Graph.hpp"
 #include "Flow.hpp"
 #include "ZX_Graph.hpp"
-#include "ZX2MBQC.hpp"
+#include "Circ2MBQC.hpp"
 #include "QASM_Parser.hpp"
 #include "Quantum_Circuit.hpp"
 #include <iostream>
@@ -317,8 +317,7 @@ TEST_CASE("Bell state circuit test") {
 std::string simulateCircuit(const char* qasm_text, const char* inputState) {
     QASMParser qasm = QASMParser("", qasm_text);
     QuantumCircuit circ = qasm.parse();
-    ZXGraph originalZX = ZXGraph::fromQuantumCircuit(circ);
-    MBQC_Graph graph = ZXtoMBQCGraph(originalZX);
+    MBQC_Graph graph = CIRCtoMBQCGraph(circ);
     PauliFlowResult flow = findPauliFlow(graph);
     Simulator sim(graph, flow, true, inputState);
     return sim.runAndGetOutput();
