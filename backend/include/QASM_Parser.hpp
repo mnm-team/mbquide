@@ -2,7 +2,7 @@
 #define QASMPARSER_HPP
 
 #include "Quantum_Circuit.hpp"
-#include "ZX_Graph.hpp"
+#include "utils.hpp"
 #include <string>
 #include <fstream>
 #include <sstream>

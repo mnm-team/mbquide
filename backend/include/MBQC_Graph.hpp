@@ -33,6 +33,7 @@ public:
 
     std::vector<std::pair<int, int>> getAllEdges() const;
     std::vector<int> getNeighbors(int u) const;
+    std::unordered_set<int> oddNeighborhood(const std::unordered_set<int>& S) const;
     const std::vector<std::vector<int>>& getAdjacencyMatrix() const;
     const int getSize() const;
     const std::map<int, OutputAdjustmentMap>& getOutputAdjustments() const;
@@ -43,15 +44,18 @@ public:
     
     void printGraph() const;
     std::string stateHash() const;
-
+    
     MBQC_Graph clone() const;
-
+    
     bool isInput(int u) const;
     bool isOutput(int u) const;
-
+    
     std::vector<int> getOutputs() const;
     std::vector<int> getInputs() const;
-
+    std::vector<int> getNonOutputs() const;
+    std::vector<int> getNonInputs() const;
+    std::vector<int> mvertices() const;
+    
     
     // Operations: 
     void localComplementation(int u);
@@ -63,24 +67,17 @@ public:
     void relabelPlanar(int u, MeasurementBasis preferredBasis);
     void relabelPlanar(int u);
     void mergeYZ(int u, int v);
-
+    
     // Simplification:
     void simplify(int maxIterations = 1000);
     bool mergeAllYZNodes();
-
-    // FLOW
-    std::vector<int> getNonOutputs() const;
-    std::vector<int> getNonInputs() const;
-    std::vector<std::vector<int>> getFlowDemandMatrix() const;
-    std::unordered_set<int> oddNeighborhood(const std::unordered_set<int>& S) const;
-    std::vector<int> mvertices() const;
-
+    
     // JSON: 
     json toJson() const;
     void exportToPYZXJsonFile(const std::string& filename, int rowLength = 4) const;
     static MBQC_Graph fromJson(const json& j);
     static MBQC_Graph importFromPYZXJsonFile(const std::string& filename);
-
+    
 private:
     int size;
     std::vector<std::vector<int>> adjacencyMatrix;

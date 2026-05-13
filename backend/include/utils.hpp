@@ -109,6 +109,17 @@ std::vector<std::vector<double>> getInverse(const std::vector<std::vector<T>>& m
 
 bool computeTransitiveClosure(const std::vector<int>& nodes, std::vector<std::pair<int,int>>& edges);
 
-
+// GF2 functions
+using GF2Mat = std::vector<std::vector<int>>;
+GF2Mat gf2Eye(int n);
+GF2Mat gf2Zeros(int r, int c);
+GF2Mat gf2Mul(const GF2Mat& A, const GF2Mat& B);
+GF2Mat gf2Hcat(const GF2Mat& A, const GF2Mat& B);
+GF2Mat gf2Vcat(const GF2Mat& A, const GF2Mat& B);
+GF2Mat gf2ColSlice(const GF2Mat& A, int colStart, int colEnd);
+void gf2XorRowInto(GF2Mat& mat, int dst, const std::vector<int>& src);
+int gf2RREF(GF2Mat& mat, int nActiveCols, std::vector<int>& pivotCols, std::vector<int>& pivotRows);
+bool gf2RightInvAndKernel(const GF2Mat& M, GF2Mat& C0, GF2Mat& F);
+bool gf2IsDAG(const GF2Mat& NC);
 
 #endif
