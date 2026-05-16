@@ -8,7 +8,6 @@
 #include "Circ2MBQC.hpp"
 #include "QASM_Parser.hpp"
 #include "Quantum_Circuit.hpp"
-#include "Flow.hpp"
 #include "test_main.cpp"
 #include <cmath>
 #include <random>
@@ -744,66 +743,6 @@ TEST_CASE("Test invalid graph operations") {
     CHECK(graph.getSize() == 3);
     std::cerr << "Ignore this setting node error - ";
     graph.setMeasurement(3, MeasurementBasis::Y, M_PI);
-}
-
-
-TEST_CASE("Find Pauli Flow") {
-
-    SUBCASE("No flow should be found") {
-
-        MBQC_Graph graph(6, {0}, {4,5});
-
-        graph.setMeasurement(0, MeasurementBasis::X);
-        graph.setMeasurement(1, MeasurementBasis::Y);
-        graph.setMeasurement(2, MeasurementBasis::XY);
-        graph.setMeasurement(3, MeasurementBasis::YZ);
-
-        // Run Pauli flow finder
-        PauliFlowResult result = findPauliFlow(graph);
-
-        CHECK(!result.ok);
-        
-        // Depth map must contain all vertices
-        CHECK(result.depths.size() == 0);
-
-    }
-
-    SUBCASE("Example that has flow (according to graphix)") {
-
-            const char* qasm_text = R"qasm(
-OPENQASM 2.0;
-include "qelib1.inc";
-
-qreg q[2];
-creg c[2];
-
-// Apply rotation gates
-rz(3.141) q[0];
-rz(3.141) q[1];
-cx q[0], q[1];
-s q[0];
-cx q[1], q[0];
-rz(3.141) q[1];
-cx q[1], q[0];
-rz(3.141) q[0];
-            )qasm";
-        
-            QASMParser qasm = QASMParser("", qasm_text);
-            QuantumCircuit circ = qasm.parse();
-            ZXGraph originalZX = ZXGraph::fromQuantumCircuit(circ);
-            MBQC_Graph g = ZXtoMBQCGraph(originalZX);
-        
-            // Run Pauli flow finder
-            PauliFlowResult result = findPauliFlow(g);
-        
-            CHECK(result.ok);
-            
-            // Depth map must contain all vertices
-            CHECK(result.depths.size() == g.getSize());
-
-        
-    }
-
 }
 
 TEST_CASE("Output Adjustment"){

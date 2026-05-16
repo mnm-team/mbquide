@@ -7,6 +7,7 @@ add_executable(Tests
     test_outAdj.cpp
     test_Statevector.cpp
     test_Simulator.cpp
+    test_Flow.cpp
 )
 
 target_link_libraries(Tests
