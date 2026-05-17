@@ -11,7 +11,31 @@ using json = nlohmann::json;
 #include "Flow.hpp"
 #include "OutputAdjustments.hpp"
 #include "Simulator.hpp"
+#include <fstream>
+#include <sstream>
+#include <filesystem>
 
+// Helper to get MIME type
+std::string get_mime_type(const std::string& path) {
+    if (path.ends_with(".html")) return "text/html";
+    if (path.ends_with(".js"))   return "application/javascript";
+    if (path.ends_with(".css"))  return "text/css";
+    if (path.ends_with(".svg"))  return "image/svg+xml";
+    if (path.ends_with(".png"))  return "image/png";
+    if (path.ends_with(".ico"))  return "image/x-icon";
+    if (path.ends_with(".json")) return "application/json";
+    if (path.ends_with(".woff2")) return "font/woff2";
+    return "application/octet-stream";
+}
+
+// Helper to read a file into a string
+std::optional<std::string> read_file(const std::string& path) {
+    std::ifstream f(path, std::ios::binary);
+    if (!f) return std::nullopt;
+    std::ostringstream ss;
+    ss << f.rdbuf();
+    return ss.str();
+}
 
 // Session map: stores objects by session ID
 std::unordered_map<std::string, MBQC_Graph> user_graphs;
@@ -374,6 +398,58 @@ int main() {
             
 
     });
+
+    // Serve static frontend files
+    CROW_ROUTE(app, "/<path>")
+    ([](const crow::request& /*req*/, crow::response& res, std::string path) {
+        const std::string dist = "./dist";
+
+        // Sanitize path traversal
+        if (path.find("..") != std::string::npos) {
+            res.code = 403;
+            res.end();
+            return;
+        }
+
+        std::string file_path = dist + "/" + path;
+
+        // If it's a directory or doesn't exist, fall back to index.html (SPA routing)
+        if (!std::filesystem::exists(file_path) || std::filesystem::is_directory(file_path)) {
+            file_path = dist + "/index.html";
+        }
+
+        auto content = read_file(file_path);
+        if (!content) {
+            res.code = 404;
+            res.end();
+            return;
+        }
+
+        res.set_header("Content-Type", get_mime_type(file_path));
+        res.write(*content);
+        res.end();
+    });
+
+    // Root route
+    CROW_ROUTE(app, "/")
+    ([]() {
+        crow::response res;
+        auto content = read_file("./dist/index.html");
+
+        if (content) {
+            res.set_header("Content-Type", "text/html");
+            res.write(*content);
+        } else {
+            res.code = 404;
+        }
+
+        return res;
+    });
+
+    std::thread([](){
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        std::system("xdg-open http://localhost:18080");
+    }).detach();
 
     std::cout << "Crow server starting on http://localhost:18080...\n";
     app.port(18080).multithreaded().run();
