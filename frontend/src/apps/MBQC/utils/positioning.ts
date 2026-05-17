@@ -17,15 +17,16 @@ export const getNodePosition = (
 ): Record<number, { x: number; y: number }> => {
   // Build adjacency list for UNDIRECTED graph
   const adjacency = new Map<number, number[]>();
+
   for (const edge of edges) {
     if (!adjacency.has(edge.source)) adjacency.set(edge.source, []);
     if (!adjacency.has(edge.target)) adjacency.set(edge.target, []);
+
     adjacency.get(edge.source)!.push(edge.target);
     adjacency.get(edge.target)!.push(edge.source);
   }
 
-  // BFS from input nodes, each node assigned to the FIRST layer it's reached
-  // (visited set prevents back-traversal from corrupting layer assignments)
+  // BFS from input nodes
   const layerOf = new Map<number, number>();
   const queue: { id: number; layer: number }[] = [];
 
@@ -35,44 +36,58 @@ export const getNodePosition = (
   }
 
   let head = 0;
+
   while (head < queue.length) {
     const { id, layer } = queue[head++];
 
     for (const neighbor of adjacency.get(id) ?? []) {
-      if (!layerOf.has(neighbor)) { // ← only visit each node once
+      if (!layerOf.has(neighbor)) {
         layerOf.set(neighbor, layer + 1);
         queue.push({ id: neighbor, layer: layer + 1 });
       }
     }
   }
 
-  // Fallback: assign any unreachable nodes to layer 0
+  // Fallback: assign unreachable nodes to layer 0
   for (const node of nodes) {
-    if (!layerOf.has(node.id)) layerOf.set(node.id, 0);
+    if (!layerOf.has(node.id)) {
+      layerOf.set(node.id, 0);
+    }
   }
 
   // Group nodes by layer
   const layers = new Map<number, number[]>();
+
   for (const [id, layer] of layerOf) {
-    if (!layers.has(layer)) layers.set(layer, []);
+    if (!layers.has(layer)) {
+      layers.set(layer, []);
+    }
+
     layers.get(layer)!.push(id);
   }
 
-  // Compute x/y positions
+  // Compute positions
   const positionOf: Record<number, { x: number; y: number }> = {};
 
   for (const [layer, nodeIds] of layers) {
-    const x = LAYOUT_CONFIG.START_OFFSET_X + layer * LAYOUT_CONFIG.H_GAP;
-    nodeIds.forEach((id, index) => {
-      const y = LAYOUT_CONFIG.START_OFFSET_Y + index * LAYOUT_CONFIG.V_GAP;
+    const x =
+      LAYOUT_CONFIG.START_OFFSET_X +
+      layer * LAYOUT_CONFIG.H_GAP;
+
+    // Sort descending so lowest id ends up at the bottom
+    const sortedIds = [...nodeIds].sort((a, b) => b - a);
+
+    sortedIds.forEach((id, index) => {
+      const y =
+        LAYOUT_CONFIG.START_OFFSET_Y +
+        index * LAYOUT_CONFIG.V_GAP;
+
       positionOf[id] = { x, y };
     });
   }
 
   return positionOf;
 };
-
-
 
 export const positionNodes = (
   nodes: NodeType[],

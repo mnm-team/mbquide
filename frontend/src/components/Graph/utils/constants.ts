@@ -5,7 +5,7 @@ export const SVG_DIMENSIONS = {
 
 export const EXAMPLE_CONFIG = {
   X_OFFSET: 1850,
-  Y_OFFSET: 150,
+  Y_OFFSET: 200,
   Y_DISTANCE: 70,
 } as const;
 
