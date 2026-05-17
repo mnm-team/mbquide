@@ -136,7 +136,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
   };
 
   return (
-    <div className="flex max-w-[95vw] flex-wrap items-center justify-center gap-6 px-4 py-2">
+    <div className="flex max-w-[95vw] flex-wrap items-center justify-center gap-6 px-0 py-2">
       {renderButtonGroup(navigationButtons)}
       {renderButtonGroup(operationButtons)}
       {renderButtonGroup(undoButtons)}

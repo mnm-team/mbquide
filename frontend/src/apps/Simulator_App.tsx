@@ -262,8 +262,8 @@ const SimulatorApp: React.FC = () => {
               height={window.innerHeight - 65}
             />
             <div className="absolute bottom-6 left-1/2 z-10 w-full -translate-x-1/2 pointer-events-none">
-              <div className="pointer-events-auto flex justify-center px-4">
-                <div className="w-fit max-w-[100vw] rounded-2xl border border-black/10 bg-white/10 p-2 backdrop-blur-xl">
+              <div className="pointer-events-auto flex justify-center">
+                <div className="w-fit max-w-[95vw] rounded-2xl border border-black/10 bg-white/10 p-2 backdrop-blur-xl">
                   <ControlPanel
                     selectedCount={0}
                     canUndo={canUndo}

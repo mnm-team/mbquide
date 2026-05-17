@@ -87,7 +87,7 @@ export function MBQC_Graph({
 
     setTranslate({
       x: 960 - center.x,
-      y: 600 - center.y,
+      y: 540 - center.y,
     });
   }, [centerGraphTrigger, mainNodes, setTranslate]);
 
@@ -140,7 +140,7 @@ export function MBQC_Graph({
     <div style={{ position: 'relative' }}>
       <svg
         ref={svgRef}
-        viewBox="0 0 1920 1200"
+        viewBox="0 0 1920 1080"
         width="100%"
         height="100%"
         preserveAspectRatio="xMidYMid meet"
@@ -198,7 +198,7 @@ export function ZX_Graph({
     <div style={{ position: 'relative' }}>
       <svg
         ref={svgRef}
-        viewBox="0 0 1920 1200"
+        viewBox="0 0 1920 1080"
         width="100%"
         height="100%"
         preserveAspectRatio="xMidYMid meet"
