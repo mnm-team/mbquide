@@ -1,4 +1,4 @@
-#include "crow_all.h"
+#include <crow.h>
 
 #include <nlohmann/json.hpp>
 using json = nlohmann::json;
