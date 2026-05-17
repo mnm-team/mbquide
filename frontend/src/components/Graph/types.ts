@@ -43,6 +43,7 @@ export type GraphProps = {
   runRelabeling?: () => void;
   onPhaseSubmit?: (node?: NodeType, angle?: number) => void;
   buildingMode?: boolean
+  centerGraphTrigger?: number;
 };
 
 export type ContextMenuState = {

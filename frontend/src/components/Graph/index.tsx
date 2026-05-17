@@ -5,6 +5,7 @@ import { useContextMenu } from './hooks/useContextMenu';
 import { ContextMenu } from './ui/ContextMenu';
 import { PhaseInputModal } from './ui/phaseInputMode';
 import { BACKGROUND_COLOR } from './utils/colors';
+import { getBoundingCenter } from './utils/functions';
 import { useSvgPan } from './hooks/useSvgPan';
 
 export function MBQC_Graph({
@@ -22,11 +23,12 @@ export function MBQC_Graph({
   onCreateNewEdge,
   onPhaseSubmit,
   buildingMode = false,
+  centerGraphTrigger,
 }: GraphProps) {
   const selectedNodesRef = useRef<NodeType[]>([]);
   const [selectedNodes, setSelectedNodes] = useState<NodeType[]>([]);
   const [phaseModalNode, setPhaseModalNode] = useState<NodeType | null>(null);
-  
+
   const { contextMenu, setContextMenu } = useContextMenu();
 
   const handleNodeDoubleClick = (node: NodeType) => {
@@ -64,7 +66,7 @@ export function MBQC_Graph({
     outputAdjustments,
   });
 
-  const { translate, onPointerDown, onPointerMove, onPointerUp } = useSvgPan(svgRef);
+  const { translate, setTranslate, onPointerDown, onPointerMove, onPointerUp } = useSvgPan(svgRef);
 
 
   // Sync translate
@@ -76,6 +78,18 @@ export function MBQC_Graph({
     );
     setPanOffset(translate);
   }, [translate]);
+
+  // Reset Pan to Center
+  useEffect(() => {
+    if (mainNodes.length === 0) return;
+
+    const center = getBoundingCenter(mainNodes);
+
+    setTranslate({
+      x: 960 - center.x,
+      y: 600 - center.y,
+    });
+  }, [centerGraphTrigger, mainNodes, setTranslate]);
 
   // Keep ref in sync with state
   useEffect(() => {

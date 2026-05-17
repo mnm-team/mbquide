@@ -26,6 +26,7 @@ import {
 export default function MBQC_App() {
   const navigate = useNavigate();
   const [buildingMode, setBuildingMode] = useState(false);
+  const [centerGraphTrigger, setCenterGraphTrigger] = useState(0);
 
   const {
     selectedNodes,
@@ -239,6 +240,7 @@ export default function MBQC_App() {
         console.log(`\tOdd neigbors corrf: ${JSON.stringify(flow.oddNcorrf)}`);
         console.log(`\tDepths: ${JSON.stringify(flow.depths)}`);
         orderNodesByFlow(flow.depths, flow.corrf, flow.oddNcorrf);
+        setCenterGraphTrigger(prev => prev + 1);
         setFlowFocusable(true);
         setSimulatable(true);
       } else {
@@ -487,6 +489,7 @@ export default function MBQC_App() {
           onCreateNewEdge={handleEdgeCreation}
           onPhaseSubmit={handlePhaseSet}
           buildingMode={buildingMode}
+          centerGraphTrigger={centerGraphTrigger}
         />
 
         {/* OVERLAY CONTROL PANEL */}

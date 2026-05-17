@@ -196,7 +196,6 @@ export const getDepthOrderedNodes = (
 };
 
 
-
 export const getCenterOfNodes = (nodes: NodeType[]): { x: number; y: number } => {
   if (nodes.length === 0) return { x: 1850, y: 5000 };
 
