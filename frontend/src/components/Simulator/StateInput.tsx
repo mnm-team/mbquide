@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo } from "react";
 import { ActionButton } from "../Buttons";
 
 interface StateInputProps {
-  numQubits: number;
+  inputList: number[];
   onSubmit?: (state: string) => void;
   disableSubmit?: boolean;
 }
@@ -104,10 +104,12 @@ function formatComplex(c: Complex): string {
 const NORM_TOLERANCE = 1e-6;
 
 export default function StateInput({
-  numQubits,
-  onSubmit,
+  inputList,
+  onSubmit, 
   disableSubmit,
 }: StateInputProps) {
+  const numQubits = inputList.length;
+
   const [amplitudeStrings, setAmplitudeStrings] = useState<Record<string, string>>({});
   const [focusedKey, setFocusedKey] = useState<string | null>(null);
 
@@ -184,62 +186,84 @@ export default function StateInput({
         )}
       </div>
 
-      {/* Center: horizontally scrollable basis states */}
-      <div className="overflow-x-auto flex-1">
-        <div
-          className="flex flex-row gap-px px-3 py-2"
-          style={{ width: "max-content", height: "100%" }}
-        >
-          {bitstrings.map((bs) => {
-            const raw = amplitudeStrings[bs];
-            const parsed = raw ? parseAmplitude(raw) : undefined;
-            const hasError = raw && raw.trim() !== "" && parsed === null;
+      {/* Center: statevector inputs or info message */}
+      <div className="flex-1 flex">
+        {numQubits > 4 ? (
+          <div className="h-full flex items-center px-4 py-2 text-sm text-slate-500">
+            Statevector input is disabled for systems with more than 4 input qubits.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <div
+              className="flex flex-row gap-px px-3 py-2"
+              style={{ width: "max-content", height: "100%" }}
+            >
+              {bitstrings.map((bs) => {
+                const raw = amplitudeStrings[bs];
+                const parsed = raw ? parseAmplitude(raw) : undefined;
+                const hasError = raw && raw.trim() !== "" && parsed === null;
 
-            return (
-              <div
-                key={bs}
-                className={`flex items-center border rounded-sm overflow-hidden transition-colors duration-150 shrink-0 h-full ${
-                  hasError
-                    ? "border-red-300 bg-red-50"
-                    : focusedKey === bs
-                    ? "border-blue-400 bg-blue-50"
-                    : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
-                }`}
-                style={{ width: "160px" }}
-              >
-                {/* Ket label */}
-                <div
-                  className={`flex items-center justify-center px-2 self-stretch border-r text-xs tracking-wider shrink-0 ${
-                    hasError
-                      ? "border-red-200 bg-red-100/50"
-                      : focusedKey === bs
-                      ? "border-blue-200 bg-blue-100/50"
-                      : "border-slate-200 bg-slate-50"
-                  }`}
-                >
-                  <span className="text-slate-500">|</span>
-                  <span className="text-slate-700">{bs}</span>
-                  <span className="text-slate-500">⟩</span>
-                </div>
+                return (
+                  <div
+                    key={bs}
+                    className={`flex items-center border rounded-sm overflow-hidden transition-colors duration-150 shrink-0 h-full ${
+                      hasError
+                        ? "border-red-300 bg-red-50"
+                        : focusedKey === bs
+                        ? "border-blue-400 bg-blue-50"
+                        : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                    }`}
+                    style={{ width: "160px" }}
+                  >
+                    {/* Ket label */}
+                    <div
+                      className={`flex flex-col items-center justify-center px-2 self-stretch border-r shrink-0 min-w-[52px] ${
+                        hasError
+                          ? "border-red-200 bg-red-100/50"
+                          : focusedKey === bs
+                          ? "border-blue-200 bg-blue-100/50"
+                          : "border-slate-200 bg-slate-50"
+                      }`}
+                    >
+                      {/* Tiny input IDs */}
+                      {inputList.length > 1 && (
+                      <div className="text-[9px] leading-none text-slate-400 mb-1 flex gap-[2px]">
+                        {[...inputList]
+                          .sort((a, b) => b - a)
+                          .map((item) => (
+                            <span key={item}>{item}</span>
+                          ))}
+                      </div>
+                      )}
 
-                {/* α = input inline */}
-                <div className="flex items-center px-2 flex-1 min-w-0">
-                  <span className="text-slate-500 text-xs shrink-0">α = </span>
-                  <input
-                    type="text"
-                    placeholder="0 + 0i"
-                    value={amplitudeStrings[bs] ?? ""}
-                    onChange={(e) => handleAmplitudeChange(bs, e.target.value)}
-                    onFocus={() => setFocusedKey(bs)}
-                    onBlur={() => setFocusedKey(null)}
-                    spellCheck={false}
-                    className="flex-1 min-w-0 bg-transparent border-none outline-none text-slate-800 text-xs placeholder-slate-300 caret-blue-500 pl-1"
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </div>
+                      {/* Basis state */}
+                      <div className="flex items-center text-xs tracking-wider">
+                        <span className="text-slate-500">|</span>
+                        <span className="text-slate-700">{bs}</span>
+                        <span className="text-slate-500">⟩</span>
+                      </div>
+                    </div>
+
+                    {/* α = input inline */}
+                    <div className="flex items-center px-2 flex-1 min-w-0">
+                      <span className="text-slate-500 text-xs shrink-0">α = </span>
+                      <input
+                        type="text"
+                        placeholder="0 + 0i"
+                        value={amplitudeStrings[bs] ?? ""}
+                        onChange={(e) => handleAmplitudeChange(bs, e.target.value)}
+                        onFocus={() => setFocusedKey(bs)}
+                        onBlur={() => setFocusedKey(null)}
+                        spellCheck={false}
+                        className="flex-1 min-w-0 bg-transparent border-none outline-none text-slate-800 text-xs placeholder-slate-300 caret-blue-500 pl-1"
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Right: submit button */}

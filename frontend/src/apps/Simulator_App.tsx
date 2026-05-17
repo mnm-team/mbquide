@@ -239,7 +239,7 @@ const SimulatorApp: React.FC = () => {
       {/* Left/center column: StateInput on top, simulator below */}
       <div className="flex-1 flex flex-col h-screen" style={{ width: 'calc(100vw - 400px)' }}>
         <StateInput
-          numQubits={inputs.length}
+          inputList={inputs}
           onSubmit={handleInput}
           disableSubmit={measured.length != 0}
         />

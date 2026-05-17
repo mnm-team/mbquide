@@ -53,7 +53,8 @@ public:
     void swap(int a, int b)       { addGate("SWAP", {a, b}); }
 
     void ccx(int c0, int c1, int t) { addGate("CCX", {c0, c1, t}); }
-
+    void ccz(int c0, int c1, int t) { addGate("CCZ", {c0, c1, t}); }
+    
     void measure(int q, int c)    { addGate("Measure", {q}, {c}); }
 
     void printCircuit() const {
@@ -192,6 +193,13 @@ private:
         dCNOT(out, c0, c1);
     }
 
+    // CCZ(a,b,t) = H(t) · CCX(a,b,t) · H(t)
+    static void dCCZ(QuantumCircuit& out, int c0, int c1, int t) {
+        dH(out, t);
+        dCCX(out, c0, c1, t);
+        dH(out, t);
+    }
+
 
     static void transpileGate(QuantumCircuit& out, const Gate& g) {
         // Case-fold name for matching
@@ -218,6 +226,8 @@ private:
         else if (n == "SWAP")                dSWAP(out, g.qubits.at(0), g.qubits.at(1));
         else if (n == "CCX"  || n == "TOFFOLI")
             dCCX(out, g.qubits.at(0), g.qubits.at(1), g.qubits.at(2));
+        else if (n == "CCZ")
+            dCCZ(out, g.qubits.at(0), g.qubits.at(1), g.qubits.at(2));
         else if (n == "MEASURE")
             out.addGate(g.name, g.qubits, g.clbits, g.params); // pass-through
         else

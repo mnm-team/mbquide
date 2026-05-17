@@ -4,7 +4,6 @@
 #include "Statevector.hpp"
 #include "MBQC_Graph.hpp"
 #include "Flow.hpp"
-#include "ZX_Graph.hpp"
 #include "Circ2MBQC.hpp"
 #include "QASM_Parser.hpp"
 #include "Quantum_Circuit.hpp"
@@ -268,20 +267,16 @@ TEST_CASE("Measurement basis handling") {
 
 
 TEST_CASE("Bell state circuit test") {
-    MBQC_Graph graph(7, {0,1}, {5,6});
+    MBQC_Graph graph(5, {0,1}, {2,4});
     
-    graph.setMeasurement(0, MeasurementBasis::X, 0.0);
-    graph.setMeasurement(1, MeasurementBasis::X, 0.0);
-    graph.setMeasurement(2, MeasurementBasis::X, 0.0);
-    graph.setMeasurement(3, MeasurementBasis::X, 0.0);
-    graph.setMeasurement(4, MeasurementBasis::X, 0.0);
+    graph.setMeasurement(0, MeasurementBasis::XY, 0.0);
+    graph.setMeasurement(1, MeasurementBasis::XY, 0.0);
+    graph.setMeasurement(3, MeasurementBasis::XY, 0.0);
 
     graph.addEdge(0, 2);
     graph.addEdge(1, 3);
     graph.addEdge(2, 3);
-    graph.addEdge(2, 5);
     graph.addEdge(3, 4);
-    graph.addEdge(4, 6);
 
     PauliFlowResult flow = findPauliFlow(graph);
 
@@ -318,6 +313,7 @@ std::string simulateCircuit(const char* qasm_text, const char* inputState) {
     QASMParser qasm = QASMParser("", qasm_text);
     QuantumCircuit circ = qasm.parse();
     MBQC_Graph graph = CIRCtoMBQCGraph(circ);
+    graph.simplify();
     PauliFlowResult flow = findPauliFlow(graph);
     Simulator sim(graph, flow, true, inputState);
     return sim.runAndGetOutput();
@@ -406,6 +402,43 @@ TEST_CASE("Test Entire Pipeline (Simulating QASM Circuit)") {
         CHECK(equalUpToGlobalPhase(output, "(1)|0>"));
     }
 
+    SUBCASE("No Gate with Input") {
+        const char* circuit = R"qasm(
+            OPENQASM 2.0;
+            qreg q[2];
+        )qasm";
+
+        const char* input = "(1)|01>";
+
+        auto output = simulateCircuit(circuit, input);
+        CHECK(equalUpToGlobalPhase(output, "(1)|01>"));
+    }
+
+    SUBCASE("No Gate with Input 4 qubits") {
+        const char* circuit = R"qasm(
+            OPENQASM 2.0;
+            qreg q[4];
+        )qasm";
+
+        const char* input = "(0.707107)|0101> + (0.707107)|1100>";
+
+        auto output = simulateCircuit(circuit, input);
+        CHECK(equalUpToGlobalPhase(output, "(0.707107)|0101> + (0.707107)|1100>"));
+    }
+
+    SUBCASE("X on one qubit in a register of two") {
+        const char* circuit = R"qasm(
+            OPENQASM 2.0;
+            qreg q[2];
+            x q[0];
+        )qasm";
+
+        const char* input = "(1)|00>";
+
+        auto output = simulateCircuit(circuit, input);
+        CHECK(equalUpToGlobalPhase(output, "(1)|01>"));
+    }
+
     SUBCASE("Simple CNOT No Trigger") {
         const char* circuit = R"qasm(
             OPENQASM 2.0;
@@ -413,10 +446,10 @@ TEST_CASE("Test Entire Pipeline (Simulating QASM Circuit)") {
             cx q[0],q[1];
         )qasm";
 
-        const char* input = "(1)|00>";
+        const char* input = "(1)|10>";
 
         auto output = simulateCircuit(circuit, input);
-        CHECK(equalUpToGlobalPhase(output, "(1)|00>"));
+        CHECK(equalUpToGlobalPhase(output, "(1)|10>"));
     }
 
     SUBCASE("Simple CNOT Triggered") {
@@ -592,7 +625,7 @@ TEST_CASE("Test Entire Pipeline (Simulating QASM Circuit)") {
             cx q[2],q[3];
         )qasm";
 
-        const char* input = "(1)|1000>";
+        const char* input = "(1)|0001>";
 
         auto output = simulateCircuit(circuit, input);
         CHECK(equalUpToGlobalPhase(output, "(1)|1111>"));
@@ -641,8 +674,7 @@ TEST_CASE("Test Entire Pipeline (Simulating QASM Circuit)") {
         const char* input = "(1)|0000>";
 
         auto output = simulateCircuit(circuit, input);
-        CHECK(equalUpToGlobalPhase(output,
-            "(0.5)|0000> + (0.5)|0101> + (0.5)|1010> + (0.5)|1111>"));  // Here the order that gets outputted of the simulator is still weird (it depends on the insertion order (via the id of the nodes))
+        CHECK(equalUpToGlobalPhase(output,"(0.5)|0000> + (0.5)|0011> + (0.5)|1100> + (0.5)|1111>"));
     }
 
     SUBCASE("Three Qubit GHZ Then Undo") {
@@ -698,7 +730,7 @@ TEST_CASE("Test Entire Pipeline (Simulating QASM Circuit)") {
             ccx q[0],q[1],q[2];
         )qasm";
 
-        const char* input = "(1)|110>";
+        const char* input = "(1)|011>";
         auto output = simulateCircuit(circuit, input);
         CHECK(equalUpToGlobalPhase(output, "(1)|111>"));
     }
@@ -722,7 +754,7 @@ TEST_CASE("Test Entire Pipeline (Simulating QASM Circuit)") {
             ccx q[1],q[2],q[0];
         )qasm";
 
-        const char* input = "(1)|011>";
+        const char* input = "(1)|110>";
         auto output = simulateCircuit(circuit, input);
         CHECK(equalUpToGlobalPhase(output, "(1)|111>"));
     }
@@ -739,18 +771,29 @@ TEST_CASE("Test Entire Pipeline (Simulating QASM Circuit)") {
         CHECK(equalUpToGlobalPhase(output, "(1)|000>"));
     }
 
+    SUBCASE("CCX with No Trigger (One One)") {
+        const char* circuit = R"qasm(
+            OPENQASM 2.0;
+            qreg q[3];
+            ccx q[0],q[1],q[2];
+        )qasm";
+
+        const char* input = "(1)|001>";
+        auto output = simulateCircuit(circuit, input);
+        CHECK(equalUpToGlobalPhase(output, "(1)|001>"));
+    }
+
 
     SUBCASE("CCZ with Controls 0 and 1, Target 2, Input |000>") {
         const char* circuit = R"qasm(
             OPENQASM 2.0;
             qreg q[3];
-            h q[2];       // Optional: if you want to see phase in X-basis
             ccz q[0],q[1],q[2];
         )qasm";
 
         const char* input = "(1)|000>";
         auto output = simulateCircuit(circuit, input);
-        CHECK(equalUpToGlobalPhase(output, "(0.707107)|000> + (0.707107)|100>"));
+        CHECK(equalUpToGlobalPhase(output, "(1)|000>"));
     }
 
     SUBCASE("CCZ with Controls 0 and 1, Target 2, Input |110>") {
@@ -799,5 +842,17 @@ TEST_CASE("Test Entire Pipeline (Simulating QASM Circuit)") {
         const char* input = "(1)|000>";
         auto output = simulateCircuit(circuit, input);
         CHECK(equalUpToGlobalPhase(output, "(1)|000>"));
+    }
+
+    SUBCASE("CCZ with No Trigger (One One)") {
+        const char* circuit = R"qasm(
+            OPENQASM 2.0;
+            qreg q[3];
+            ccz q[0],q[1],q[2];
+        )qasm";
+
+        const char* input = "(1)|001>";
+        auto output = simulateCircuit(circuit, input);
+        CHECK(equalUpToGlobalPhase(output, "(1)|001>"));
     }
 }

@@ -403,7 +403,7 @@ public:
         }
 
         std::vector<int> inputs = graph.getInputs();
-        std::sort(inputs.begin(), inputs.end());
+        std::sort(inputs.begin(), inputs.end(), std::greater<int>());
         
         qubitToGraphNode.reserve(numInputNodes);
         for (int i : inputs) {
@@ -507,6 +507,33 @@ public:
         oa.reset();
     }
 
+    // Reorders the statevector qubits so that the output node with the
+    // lowest graph node ID sits at bit 0 (rightmost in the bitstring).
+    // Call this once simulation is complete.
+    void reorderOutputQubits() {
+        int n = (int)qubitToGraphNode.size();
+
+        // Build a sorted list of (nodeId, currentQubitIndex)
+        std::vector<std::pair<int,int>> nodeToQubit(n);
+        for (int q = 0; q < n; ++q)
+            nodeToQubit[q] = {qubitToGraphNode[q], q};
+
+        // Sort by node ID ascending: lowest node ID should end up at bit 0
+        std::sort(nodeToQubit.begin(), nodeToQubit.end());
+
+        // permutation[new_qubit] = old_qubit
+        // new qubit 0 (LSB) = the qubit currently holding the lowest node ID
+        std::vector<int> permutation(n);
+        for (int new_q = 0; new_q < n; ++new_q)
+            permutation[new_q] = nodeToQubit[new_q].second;
+
+        statevectorSimulator.reorderQubits(permutation);
+
+        // Update qubitToGraphNode to reflect the new ordering
+        for (int new_q = 0; new_q < n; ++new_q)
+            qubitToGraphNode[new_q] = nodeToQubit[new_q].first;
+    }
+
 
     void writeAllOutAdjToStatevec() {
         for (auto [id, _] : graph.getOutputAdjustments()) {
@@ -538,6 +565,7 @@ public:
                 return;
             }
         }
+        reorderOutputQubits();
     }
 
     std::string runAndGetOutput() {

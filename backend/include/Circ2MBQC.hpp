@@ -35,12 +35,7 @@
 inline MBQC_Graph CIRCtoMBQCGraph(QuantumCircuit circ, bool planarOnly = true) {
     
     QuantumCircuit tc = circ.transpile();
-
     const int nq = tc.num_qubits;
-
-    //  We pre-allocate one node per qubit to act as the initial input/output node.
-    //  all nodes start as both inputs and outputs
-    //  the output set will be updated as we consume gates.
 
     std::vector<int> wireOut(nq);
     for (int q = 0; q < nq; ++q) wireOut[q] = q;
@@ -48,13 +43,12 @@ inline MBQC_Graph CIRCtoMBQCGraph(QuantumCircuit circ, bool planarOnly = true) {
     int nextNode = nq;
 
     struct NodeInfo {
-        MeasurementBasis basis = MeasurementBasis::OUTPUT; // default
+        MeasurementBasis basis = MeasurementBasis::OUTPUT;
         double angle = 0.0;
     };
 
     std::vector<NodeInfo> nodes(nq);
     std::vector<std::pair<int,int>> edges;
-
 
     for (const auto& g : tc.gates) {
         std::string name = g.name;
@@ -65,14 +59,12 @@ inline MBQC_Graph CIRCtoMBQCGraph(QuantumCircuit circ, bool planarOnly = true) {
             //   - Assign XY(-α) to the current wire-output node.
             //   - Allocate a fresh node (new output, no measurement yet).
             //   - Connect old output → fresh node.
-            int q     = g.qubits.at(0);
+            int q        = g.qubits.at(0);
             double alpha = g.params.at(0);
-
-            int oldOut = wireOut[q];
-            int newOut = nextNode++;
+            int oldOut   = wireOut[q];
+            int newOut   = nextNode++;
 
             nodes.push_back(NodeInfo{MeasurementBasis::OUTPUT, 0.0});
-
             nodes[oldOut].basis = MeasurementBasis::XY;
             nodes[oldOut].angle = -alpha;
 
@@ -89,75 +81,102 @@ inline MBQC_Graph CIRCtoMBQCGraph(QuantumCircuit circ, bool planarOnly = true) {
         } else if (name == "MEASURE") {
             // no graph node added.
         } else {
-            // Any gate that was not reduced to {J, CZ} by transpile() is
-            // unexpected; surface it as a clear error.
+            // Any gate that was not reduced to {J, CZ} by transpile() is unexpected
             throw std::invalid_argument("CirctoMBQCGraph: gate '" + g.name + "' was not reduced to {J, CZ} by transpile().");
         }
     }
 
-    //  Inputs  : the original nq nodes (one per qubit wire).
     std::vector<int> inputNodes(nq);
     for (int q = 0; q < nq; ++q) inputNodes[q] = q;
-    
 
-    // Insert identity patterns where input == output.
+    // Identity padding
     for (int q = 0; q < nq; ++q) {
-        if (wireOut[q] == q) { 
+        if (wireOut[q] == q) {
             int midNode = nextNode++;
             int newOut  = nextNode++;
- 
+
             nodes.push_back(NodeInfo{MeasurementBasis::X, 0.0});
             nodes.push_back(NodeInfo{MeasurementBasis::OUTPUT, 0.0});
- 
-            // input(q, X) — midNode(X) — newOut(output)
+
             edges.push_back({q,       midNode});
             edges.push_back({midNode, newOut});
- 
-            // Mark the input node itself as X-measured.
+
             nodes[q].basis = MeasurementBasis::X;
             nodes[q].angle = 0.0;
- 
+
             wireOut[q] = newOut;
         }
     }
 
+    // wireOut[q] is the output node for circuit qubit q.
+    // We want: among all output node IDs, the one for q=0 is smallest,
+    // q=1 is next, etc. Achieve this by building a remapping of node IDs
+    // that swaps output node IDs into sorted-by-qubit order, leaving all
+    // non-output node IDs unchanged.
 
-    //  Outputs : the current wire-output nodes after all gates.
+    // Collect output node IDs sorted by circuit qubit (already in qubit order)
+    std::vector<int> outputByQubit(nq);
+    for (int q = 0; q < nq; ++q) outputByQubit[q] = wireOut[q];
+
+    // Get those same IDs sorted ascending — these are the IDs we want to assign
+    std::vector<int> sortedOutputIds = outputByQubit;
+    std::sort(sortedOutputIds.begin(), sortedOutputIds.end());
+
+    // Build remapping: outputByQubit[q] → sortedOutputIds[q]
+    // i.e. the output node for q=0 gets the smallest output node ID, etc.
+    std::unordered_map<int,int> remap;
+    for (int q = 0; q < nq; ++q)
+        remap[outputByQubit[q]] = sortedOutputIds[q];
+    // Note: if two outputs already have the right relative order this is a no-op for them.
+    // Non-output nodes are not in remap and pass through unchanged.
+
+    auto remapId = [&](int id) -> int {
+        auto it = remap.find(id);
+        return it != remap.end() ? it->second : id;
+    };
+
+    // Apply remapping to edges and wireOut
+    for (auto& [u, v] : edges) {
+        u = remapId(u);
+        v = remapId(v);
+    }
+    for (int q = 0; q < nq; ++q)
+        wireOut[q] = remapId(wireOut[q]);
+
+    // Apply remapping to nodes vector (swap NodeInfo entries)
+    // We need to permute the nodes array according to remap.
+    // remap only touches output nodes, so collect swaps carefully.
+    int totalNodes = static_cast<int>(nodes.size());
+    std::vector<NodeInfo> newNodes = nodes;
+    for (auto& [oldId, newId] : remap) {
+        newNodes[newId] = nodes[oldId];
+        newNodes[oldId] = nodes[newId];
+    }
+    nodes = newNodes;
+
+    // Build output list in circuit-qubit order (now guaranteed ascending IDs)
     std::vector<int> outputNodes(nq);
     for (int q = 0; q < nq; ++q) outputNodes[q] = wireOut[q];
 
-
-
-    // ===== Construct the MBQC_Graph. =====
-
-    const int totalNodes = static_cast<int>(nodes.size());
+    // ===== Construct the MBQC_Graph =====
     MBQC_Graph graph(totalNodes, inputNodes, outputNodes);
 
-    for (const auto& [u, v] : edges) {
-        graph.addEdge(u, v);
-    }
+    for (const auto& [u, v] : edges) graph.addEdge(u, v);
 
     for (int n = 0; n < totalNodes; ++n) {
+        if (graph.isOutput(n)) continue;
         const auto& ni = nodes[n];
-        bool isOut = graph.isOutput(n);
-
-        if (isOut) continue;
-
-        if (ni.basis == MeasurementBasis::OUTPUT) {
-            throw std::runtime_error("CirctoMBQCGraph: found output in NodeInfo whereas it was not present in output list!");
-        }
-
+        if (ni.basis == MeasurementBasis::OUTPUT)
+            throw std::runtime_error("CirctoMBQCGraph: non-output node has OUTPUT basis!");
         graph.setMeasurement(n, ni.basis, ni.angle);
     }
-
 
     if (planarOnly) {
         for (int n = 0; n < graph.getSize(); ++n) {
             if (graph.isOutput(n)) continue;
             auto [b, a] = graph.getMeasurement(n);
-            if (b == MeasurementBasis::X) {
+            if (b == MeasurementBasis::X)
                 graph.relabelPlanar(n, MeasurementBasis::XY);
-            }
         }
     }
 

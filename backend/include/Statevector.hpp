@@ -285,7 +285,29 @@ public:
         return num_qubits - 1;  // The ID of the new qubit
     }
 
-    
+
+    // Reorders qubits according to a permutation.
+    // permutation[new_qubit_index] = old_qubit_index
+    // e.g. permutation = {2, 0, 1} means: new bit 0 = old bit 2, etc.
+    void reorderQubits(const std::vector<int>& permutation) {
+        if ((int)permutation.size() != num_qubits)
+            throw std::invalid_argument("reorderQubits: permutation size mismatch");
+
+        int dim = 1 << num_qubits;
+        VectorC new_state = VectorC::Zero(dim);
+
+        for (int old_idx = 0; old_idx < dim; ++old_idx) {
+            int new_idx = 0;
+            for (int new_bit = 0; new_bit < num_qubits; ++new_bit) {
+                int old_bit = permutation[new_bit];
+                int bit_val = get_bit(old_idx, old_bit);
+                new_idx = set_bit(new_idx, new_bit, bit_val);
+            }
+            new_state(new_idx) = statevector(old_idx);
+        }
+
+        statevector = std::move(new_state);
+    }
 
 
     // ============== GATES ==============
