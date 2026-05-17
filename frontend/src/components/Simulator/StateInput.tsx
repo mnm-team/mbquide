@@ -112,12 +112,14 @@ export default function StateInput({
 
   const [amplitudeStrings, setAmplitudeStrings] = useState<Record<string, string>>({});
   const [focusedKey, setFocusedKey] = useState<string | null>(null);
-
+  const [isSubmitted, setIsSubmitted] = useState(false);
+  
   const bitstrings = generateBitstrings(numQubits);
 
   const handleAmplitudeChange = useCallback(
     (bitstring: string, value: string) => {
       setAmplitudeStrings((prev) => ({ ...prev, [bitstring]: value }));
+      setIsSubmitted(false);
     },
     []
   );
@@ -155,6 +157,7 @@ export default function StateInput({
       .join(" + ");
 
     onSubmit?.(state);
+    setIsSubmitted(true);
   };
 
   const statusHint = (() => {
@@ -270,7 +273,7 @@ export default function StateInput({
       <div className="flex items-center px-3 py-2 border-l border-slate-200 shrink-0">
         <ActionButton
           onClick={handleSubmit}
-          disabled={disableSubmit || !isNormalised}
+          disabled={disableSubmit || !isNormalised || isSubmitted}
           label="Submit"
           arrow={true}
         />
