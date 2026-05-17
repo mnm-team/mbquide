@@ -261,19 +261,23 @@ const SimulatorApp: React.FC = () => {
               width={window.innerWidth - 400}
               height={window.innerHeight - 65}
             />
-            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 w-full">
-              <ControlPanel
-                selectedCount={0}
-                canUndo={canUndo}
-                canRedo={canRedo}
-                onTransformToMBQC={toMBQC}
-                // onUndo={handleUndo}
-                // onRedo={handleRedo}
-                onResetSim={handleResetGraph}
-                canResetSim={measured.length != 0  }
-                onRunAll={handleRunAll}
-                canRunAll={readyToMeasure.length != 0}
-              />
+            <div className="absolute bottom-6 left-1/2 z-10 w-full -translate-x-1/2 pointer-events-none">
+              <div className="pointer-events-auto flex justify-center px-4">
+                <div className="w-fit max-w-[100vw] rounded-2xl border border-black/10 bg-white/10 p-2 backdrop-blur-xl">
+                  <ControlPanel
+                    selectedCount={0}
+                    canUndo={canUndo}
+                    canRedo={canRedo}
+                    onTransformToMBQC={toMBQC}
+                    // onUndo={handleUndo}
+                    // onRedo={handleRedo}
+                    onResetSim={handleResetGraph}
+                    canResetSim={measured.length != 0  }
+                    onRunAll={handleRunAll}
+                    canRunAll={readyToMeasure.length != 0}
+                  />
+                </div>
+              </div>
             </div>
           </div>
         )}

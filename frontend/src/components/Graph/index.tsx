@@ -126,9 +126,9 @@ export function MBQC_Graph({
     <div style={{ position: 'relative' }}>
       <svg
         ref={svgRef}
-        viewBox="0 0 1920 900"
+        viewBox="0 0 1920 1200"
         width="100%"
-        height="auto"
+        height="100%"
         preserveAspectRatio="xMidYMid meet"
         style={{ backgroundColor: BACKGROUND_COLOR }}
         onPointerDown={onPointerDown}
@@ -184,9 +184,9 @@ export function ZX_Graph({
     <div style={{ position: 'relative' }}>
       <svg
         ref={svgRef}
-        viewBox="0 0 1920 900"
+        viewBox="0 0 1920 1200"
         width="100%"
-        height="auto"
+        height="100%"
         preserveAspectRatio="xMidYMid meet"
         style={{ backgroundColor: BACKGROUND_COLOR }}
       />
