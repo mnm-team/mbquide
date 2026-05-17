@@ -12,22 +12,9 @@ include(FetchContent)
 FetchContent_Declare(
     eigen
     GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
-    GIT_TAG 5.0.0
+    GIT_TAG 5.0.1
 )
 FetchContent_MakeAvailable(eigen)
-
-# -----------------------------
-# Asio
-# -----------------------------
-FetchContent_Declare(
-    asio
-    GIT_REPOSITORY https://github.com/chriskohlhoff/asio.git
-    GIT_TAG asio-1-38-0
-)
-FetchContent_MakeAvailable(asio)
-
-add_library(asio INTERFACE)
-target_include_directories(asio INTERFACE ${asio_SOURCE_DIR}/asio/include)
 
 # -----------------------------
 # nlohmann/json
@@ -35,9 +22,20 @@ target_include_directories(asio INTERFACE ${asio_SOURCE_DIR}/asio/include)
 FetchContent_Declare(
     nlohmann_json
     GIT_REPOSITORY https://github.com/nlohmann/json.git
-    GIT_TAG v3.11.3
+    GIT_TAG v3.12.0
 )
 FetchContent_MakeAvailable(nlohmann_json)
+
+# -----------------------------
+# Crow
+# -----------------------------
+FetchContent_Declare(
+    crow
+    GIT_REPOSITORY https://github.com/CrowCpp/Crow.git
+    GIT_TAG v1.3.2
+)
+
+FetchContent_MakeAvailable(crow)
 
 # -----------------------------
 # doctest
@@ -45,7 +43,7 @@ FetchContent_MakeAvailable(nlohmann_json)
 FetchContent_Declare(
     doctest
     GIT_REPOSITORY https://github.com/doctest/doctest.git
-    GIT_TAG v2.4.11
+    GIT_TAG v2.5.2
 )
 FetchContent_GetProperties(doctest)
 if(NOT doctest_POPULATED)
@@ -89,7 +87,6 @@ target_link_libraries(mbquide_core
 PUBLIC
     Eigen3::Eigen
     Boost::graph
-    asio
     nlohmann_json::nlohmann_json
 )
 
@@ -103,6 +100,7 @@ add_executable(Server src/server.cpp)
 target_link_libraries(Server
 PRIVATE
     mbquide_core
+    Crow::Crow
 )
 
 # -----------------------------
