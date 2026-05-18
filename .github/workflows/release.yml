@@ -109,7 +109,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: frontend-dist
-          path: backend/build/dist
+          path: frontend/dist
 
       # ── Write launcher scripts ───────────────────────────────────────────────
       - name: Write launcher (Linux / macOS)
