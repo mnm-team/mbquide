@@ -19,7 +19,6 @@ import {
   createRelabelingPlanarOperation,
   createGetFlowOperation,
   createFocusFlowOperation,
-  createTransformToMBQCOperation,
   createSimulateOperation,
   createSimplifyOperation,
 } from './api/operations';
@@ -27,6 +26,7 @@ import {
 export default function MBQC_App() {
   const navigate = useNavigate();
   const [buildingMode, setBuildingMode] = useState(false);
+  const [centerGraphTrigger, setCenterGraphTrigger] = useState(0);
 
   const {
     selectedNodes,
@@ -214,11 +214,6 @@ export default function MBQC_App() {
     runGraphOperation(createRelabelingPlanarOperation(selectedNodes[0].id, basis));
   }, [selectedNodes, runGraphOperation]);
 
-  const handleTransformToZX = useCallback(async () => {
-    await runGraphOperation(createTransformToMBQCOperation());
-    navigate('/ZX');
-  }, [runGraphOperation, navigate]);
-
   const handleSimulate = useCallback(async () => {
     await runGraphOperation(createSimulateOperation());
     navigate('/SIM');
@@ -245,6 +240,7 @@ export default function MBQC_App() {
         console.log(`\tOdd neigbors corrf: ${JSON.stringify(flow.oddNcorrf)}`);
         console.log(`\tDepths: ${JSON.stringify(flow.depths)}`);
         orderNodesByFlow(flow.depths, flow.corrf, flow.oddNcorrf);
+        setCenterGraphTrigger(prev => prev + 1);
         setFlowFocusable(true);
         setSimulatable(true);
       } else {
@@ -468,7 +464,7 @@ export default function MBQC_App() {
   }, [runGraphOperation, fetchGraph]);
 
   return (
-    <div style={{ textAlign: 'center', padding: '20px' }}>
+    <div className="relative h-screen w-screen overflow-hidden bg-[#111]">
       <LoadingOverlay isLoading={loading} />
 
       <BuildingModeToggle
@@ -476,57 +472,67 @@ export default function MBQC_App() {
         setBuildingMode={setBuildingMode}
       />
 
-      <MBQC_Graph
-        nodes={nodes}
-        edges={edges}
-        inputs={inputs}
-        outputs={outputs}
-        outputAdjustments={adjustments}
-        onSelectionChange={setSelectedNodes}
-        runLocalComplementation={handleLocalComplementation}
-        runRelabeling={handleRelabeling}
-        runRelabelingPlanar={handleRelabelingPlanar}
-        onNodeDrop={handleNodeDrop}
-        onNodeDelete={handleNodeDelete}
-        onCreateNewEdge={handleEdgeCreation}
-        onPhaseSubmit={handlePhaseSet}
-        buildingMode={buildingMode}
-      />
+      {/* GRAPH LAYER */}
+      <div className="relative h-full w-full">
+        <MBQC_Graph
+          nodes={nodes}
+          edges={edges}
+          inputs={inputs}
+          outputs={outputs}
+          outputAdjustments={adjustments}
+          onSelectionChange={setSelectedNodes}
+          runLocalComplementation={handleLocalComplementation}
+          runRelabeling={handleRelabeling}
+          runRelabelingPlanar={handleRelabelingPlanar}
+          onNodeDrop={handleNodeDrop}
+          onNodeDelete={handleNodeDelete}
+          onCreateNewEdge={handleEdgeCreation}
+          onPhaseSubmit={handlePhaseSet}
+          buildingMode={buildingMode}
+          centerGraphTrigger={centerGraphTrigger}
+        />
 
-      <ControlPanel
-        selectedCount={selectedNodes.length}
-        canUndo={canUndo}
-        canRedo={canRedo}
-        onUndo={handleUndo}
-        onRedo={handleRedo}
+        {/* OVERLAY CONTROL PANEL */}
+        <div className="pointer-events-none absolute bottom-4 left-1/2 z-[1000] w-full -translate-x-1/2">
+          <div className="pointer-events-auto flex justify-center px-2">
+            <div className="w-fit max-w-[100vw] rounded-2xl border border-black/10 bg-white/10 p-2 backdrop-blur-xl">
+              <ControlPanel
+                selectedCount={selectedNodes.length}
+                canUndo={canUndo}
+                canRedo={canRedo}
+                onUndo={handleUndo}
+                onRedo={handleRedo}
 
-        {...(!buildingMode && {
-          onSimplifyGraph: handleSimplifyGraph,
-          onLocalComplementation: handleLocalComplementation,
-          onPivot: handlePivot,
-          onZInsertion: handleZInsertion,
-          onZDeletion: handleZDeletion,
-          onRelabeling: handleRelabeling,
-          onRelabelingPlanar: handleRelabelingPlanar,
-          isLCable: isLCable(),
-          isPivotable: isPivotable(),
-          isZDeletable: isZDeletable(),
-          fitForRelabeling: fitForRelabeling(),
-          areNonPlanar: areNonPlanar(),
-          simplifyGraphDisabled: !canSimplify(),
-          onTransformToZX: handleTransformToZX,
-          onGetFlow: handleGetFlow,
-          onFocusFlow: handleFocusFlow,
-          onSimulate: handleSimulate,
-          flowFocusable,
-          simulatable,
-        })}
+                {...(!buildingMode && {
+                  onSimplifyGraph: handleSimplifyGraph,
+                  onLocalComplementation: handleLocalComplementation,
+                  onPivot: handlePivot,
+                  onZInsertion: handleZInsertion,
+                  onZDeletion: handleZDeletion,
+                  onRelabeling: handleRelabeling,
+                  onRelabelingPlanar: handleRelabelingPlanar,
+                  isLCable: isLCable(),
+                  isPivotable: isPivotable(),
+                  isZDeletable: isZDeletable(),
+                  fitForRelabeling: fitForRelabeling(),
+                  areNonPlanar: areNonPlanar(),
+                  simplifyGraphDisabled: !canSimplify(),
+                  onGetFlow: handleGetFlow,
+                  onFocusFlow: handleFocusFlow,
+                  onSimulate: handleSimulate,
+                  flowFocusable,
+                  simulatable,
+                })}
 
-        {...(buildingMode && {
-          onResetGraph: handleResetGraph,
-          resetGraphDisabled: nodes.length === 0,
-        })}
-      />
+                {...(buildingMode && {
+                  onResetGraph: handleResetGraph,
+                  resetGraphDisabled: nodes.length === 0,
+                })}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

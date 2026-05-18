@@ -1,4 +1,4 @@
-#include "crow_all.h"
+#include <crow.h>
 
 #include <nlohmann/json.hpp>
 using json = nlohmann::json;
@@ -7,10 +7,35 @@ using json = nlohmann::json;
 #include "QASM_Parser.hpp"
 #include "ZX2MBQC.hpp"
 #include "MBQC2ZX.hpp"
+#include "Circ2MBQC.hpp"
 #include "Flow.hpp"
 #include "OutputAdjustments.hpp"
 #include "Simulator.hpp"
+#include <fstream>
+#include <sstream>
+#include <filesystem>
 
+// Helper to get MIME type
+std::string get_mime_type(const std::string& path) {
+    if (path.ends_with(".html")) return "text/html";
+    if (path.ends_with(".js"))   return "application/javascript";
+    if (path.ends_with(".css"))  return "text/css";
+    if (path.ends_with(".svg"))  return "image/svg+xml";
+    if (path.ends_with(".png"))  return "image/png";
+    if (path.ends_with(".ico"))  return "image/x-icon";
+    if (path.ends_with(".json")) return "application/json";
+    if (path.ends_with(".woff2")) return "font/woff2";
+    return "application/octet-stream";
+}
+
+// Helper to read a file into a string
+std::optional<std::string> read_file(const std::string& path) {
+    std::ifstream f(path, std::ios::binary);
+    if (!f) return std::nullopt;
+    std::ostringstream ss;
+    ss << f.rdbuf();
+    return ss.str();
+}
 
 // Session map: stores objects by session ID
 std::unordered_map<std::string, MBQC_Graph> user_graphs;
@@ -257,9 +282,9 @@ int main() {
     CROW_ROUTE(app, "/api/qasm").methods(crow::HTTPMethod::Get)
     ([](const crow::request& req) {
         SessionInfo session = get_session_id(req);
-        ZXGraph& zx = get_zx_for_session(session.id);
+        MBQC_Graph& g = get_graph_for_session(session.id);
         
-        json j = zx.toJson();
+        json j = g.toJson();
 
         crow::response res{j.dump()};
         res.set_header("Content-Type", "application/json");
@@ -272,7 +297,7 @@ int main() {
     CROW_ROUTE(app, "/api/qasm").methods(crow::HTTPMethod::Post)
     ([](const crow::request& req){
         SessionInfo session = get_session_id(req);
-        ZXGraph& zx = get_zx_for_session(session.id);
+        MBQC_Graph& g = get_graph_for_session(session.id);
         crow::response res;
 
         try {
@@ -284,29 +309,16 @@ int main() {
                 
                 QASMParser parser("", qasmText);
                 QuantumCircuit qc = parser.parse();
-                zx = ZXGraph::fromQuantumCircuit(qc);
+                g = CIRCtoMBQCGraph(qc);
                 
-                json reply = zx.toJson();
+                json reply = g.toJson();
                 
                 res.code = 200;
                 res.set_header("Content-Type", "application/json");
                 res.write(reply.dump());   
 
-            } else if (j.contains("transform")) {
-                MBQC_Graph& graph = get_graph_for_session(session.id);
-
-                graph = ZXtoMBQCGraph(zx);
-                
-                json reply = graph.toJson();
-
-                res.code = 200;
-                res.set_header("Content-Type", "application/json");
-                if (session.is_new) {
-                    res.add_header("Set-Cookie", "session_id=" + session.id + "; Path=/; HttpOnly; Max-Age=86400; SameSite=None; Secure");
-                }
-                res.write(reply.dump());
             } else {
-                throw std::runtime_error("Missing field: qasm or transform");
+                throw std::runtime_error("Missing field: qasm");
             }
             
         } catch (const std::exception& e) {
@@ -386,6 +398,60 @@ int main() {
             
 
     });
+
+    // Serve static frontend files
+    CROW_ROUTE(app, "/<path>")
+    ([](const crow::request& /*req*/, crow::response& res, std::string path) {
+        const std::string dist = "./frontend/dist";
+
+        // Sanitize path traversal
+        if (path.find("..") != std::string::npos) {
+            res.code = 403;
+            res.end();
+            return;
+        }
+
+        std::string file_path = dist + "/" + path;
+
+        // If it's a directory or doesn't exist, fall back to index.html (SPA routing)
+        if (!std::filesystem::exists(file_path) || std::filesystem::is_directory(file_path)) {
+            file_path = dist + "/index.html";
+        }
+
+        auto content = read_file(file_path);
+        if (!content) {
+            res.code = 404;
+            res.end();
+            return;
+        }
+
+        res.set_header("Content-Type", get_mime_type(file_path));
+        res.write(*content);
+        res.end();
+    });
+
+    // Root route
+    CROW_ROUTE(app, "/")
+    ([]() {
+        crow::response res;
+        const std::string dist = "./frontend/dist";
+
+        auto content = read_file(dist + "/index.html");
+
+        if (content) {
+            res.set_header("Content-Type", "text/html");
+            res.write(*content);
+        } else {
+            res.code = 404;
+        }
+
+        return res;
+    });
+
+    std::thread([](){
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        std::system("xdg-open http://localhost:18080");
+    }).detach();
 
     std::cout << "Crow server starting on http://localhost:18080...\n";
     app.port(18080).multithreaded().run();

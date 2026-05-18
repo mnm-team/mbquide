@@ -132,8 +132,8 @@ export default function ZX_App() {
     const data: GraphApiResponse = await res.json()
     console.log(data)
 
-
-    const levelMap = computeLevels(data.inputs, data.outputs, data.edges, data.size);
+    const edgePairs: [number, number][] = data.edges.map(([src, tgt]) => [src, tgt]);
+    const levelMap = computeLevels(data.inputs, data.outputs, edgePairs, data.size);
 
     // Group nodes by their level
     const levelGroups: Record<number, number[]> = {};

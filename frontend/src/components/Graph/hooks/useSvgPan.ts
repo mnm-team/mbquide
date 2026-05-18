@@ -43,5 +43,5 @@ export function useSvgPan(svgRef: RefObject<SVGSVGElement | null>) {
     e.currentTarget.style.cursor = 'grab';
   }, []);
 
-  return { translate, onPointerDown, onPointerMove, onPointerUp };
+  return { translate, setTranslate, onPointerDown, onPointerMove, onPointerUp };
 }

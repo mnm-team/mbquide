@@ -91,6 +91,21 @@ std::vector<int> MBQC_Graph::getNeighbors(int u) const {
         return neighbors;
 }
 
+std::unordered_set<int> MBQC_Graph::oddNeighborhood(const std::unordered_set<int>& S) const {
+    std::unordered_set<int> odd;
+    std::vector<int> parity(size, 0);
+
+    for (int u : S) {
+        for (int v = 0; v < size; ++v) {
+            if (adjacencyMatrix[u][v] & 1) parity[v] ^= 1;
+        }
+    }
+
+    for (int v = 0; v < size; ++v) if (parity[v]) odd.insert(v);
+    
+    return odd;
+}
+
 const int MBQC_Graph::getSize() const {
     return size;
 }
@@ -132,6 +147,26 @@ std::vector<int> MBQC_Graph::getInputs() const {
     return inputs;
 }
 
+std::vector<int> MBQC_Graph::getNonOutputs() const {
+    std::vector<int> nonOutputs;
+    for (int v = 0; v < size; v++) {
+        if (!isOutput(v)) nonOutputs.push_back(v);
+    }
+    return nonOutputs;
+}
+
+std::vector<int> MBQC_Graph::getNonInputs() const {
+    std::vector<int> nonInputs;
+    for (int v = 0; v < size; v++) {
+        if (!isInput(v)) nonInputs.push_back(v);
+    }
+    return nonInputs;
+}
+
+// Give all measuremnt vertices (now all non-outputs, because inputs have a measurement basis)
+std::vector<int> MBQC_Graph::mvertices() const {
+    return getNonOutputs();
+}
 
 std::pair<MeasurementBasis, double> MBQC_Graph::getMeasurement(int node) const {
     return measurements.find(node)->second;
@@ -492,7 +527,10 @@ void MBQC_Graph::relabel(int u) {
     }
     
     angle_u = normalize_radians(angle_u);
-    if (!fAlmostEqual(fmod(angle_u, M_PI/2), 0)) {
+    if (!(fAlmostEqual(angle_u, 0) ||
+          fAlmostEqual(angle_u, M_PI/2) ||
+          fAlmostEqual(angle_u, M_PI) ||
+          fAlmostEqual(angle_u, 3*M_PI/2))) {
         std::cerr << "Relabeling: node " << u << " has angle " << radiansToString(angle_u) << " and thus not 0, pi/2, pi or 3pi/2\n";
         return;
     }
@@ -797,92 +835,6 @@ bool MBQC_Graph::mergeAllYZNodes() {
     return anyMerged;
 }
 
-
-// ########## FLOW ##############
-
-std::vector<int> MBQC_Graph::getNonOutputs() const {
-    std::vector<int> nonOutputs;
-    for (int v = 0; v < size; v++) {
-        if (!isOutput(v)) nonOutputs.push_back(v);
-    }
-    return nonOutputs;
-}
-
-std::vector<int> MBQC_Graph::getNonInputs() const {
-    std::vector<int> nonInputs;
-    for (int v = 0; v < size; v++) {
-        if (!isInput(v)) nonInputs.push_back(v);
-    }
-    return nonInputs;
-}
-
-
-std::unordered_set<int> MBQC_Graph::oddNeighborhood(const std::unordered_set<int>& S) const {
-    std::unordered_set<int> odd;
-    std::vector<int> parity(size, 0);
-
-    for (int u : S) {
-        for (int v = 0; v < size; ++v) {
-            if (adjacencyMatrix[u][v] & 1) parity[v] ^= 1;
-        }
-    }
-
-    for (int v = 0; v < size; ++v) if (parity[v]) odd.insert(v);
-    
-    return odd;
-}
-
-// Give all measuremnt vertices (now all non-outputs, because inputs have a measurement basis)
-std::vector<int> MBQC_Graph::mvertices() const {
-    return getNonOutputs();
-}
-
-
-// Flow-demand matrix (Definition 3.4 in http://arxiv.org/abs/2410.23439)
-std::vector<std::vector<int>> MBQC_Graph::getFlowDemandMatrix() const {
-
-    std::vector<int> nonOutputs = getNonOutputs();
-    std::vector<int> nonInputs = getNonInputs();
-
-    // Map vertex -> column index
-    std::unordered_map<int, int> colIndex;
-    for (int j = 0; j < nonInputs.size(); j++) {
-        colIndex[nonInputs[j]] = j;
-    }
-
-    std::vector<std::vector<int>> flowMatrix(nonOutputs.size(),  // rows 
-                                                std::vector<int>(nonInputs.size(), 0));  // columns
-
-    for (int i = 0; i < (int)nonOutputs.size(); i++) {
-        int v = nonOutputs[i];
-        auto [basis, angle] = getMeasurement(v);
-
-        // Case 1: λ(v) in {X, XY}
-        if (basis == MeasurementBasis::X || basis == MeasurementBasis::XY) {
-            for (int w : nonInputs) {
-                flowMatrix[i][colIndex[w]] = adjacencyMatrix[v][w];
-            }
-        }
-        // Case 2: λ(v) in {Z, YZ, XZ}
-        else if (basis == MeasurementBasis::Z || basis == MeasurementBasis::YZ || basis == MeasurementBasis::XZ) {
-            if (colIndex.count(v)) {  // Check if non-out v is also a non-in
-                flowMatrix[i][colIndex.at(v)] = 1;
-            }
-        }
-        // Case 3: λ(v) in {Y}
-        else if (basis == MeasurementBasis::Y) {
-            for (int w : nonInputs) {
-                if (w == v) {
-                    flowMatrix[i][colIndex.at(v)] = 1;
-                    continue;
-                }
-                flowMatrix[i][colIndex[w]] = adjacencyMatrix[v][w];
-            }
-        }
-    }
-
-    return flowMatrix;
-}
 
 
 // ########## JSON ##############

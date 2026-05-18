@@ -21,3 +21,29 @@ export function findClosestNode(
 
   return closest;
 }
+
+
+export function getBoundingCenter(nodes: NodeType[]) {
+  const xs = nodes
+    .map(n => n.x)
+    .filter((x): x is number => x !== undefined);
+
+  const ys = nodes
+    .map(n => n.y)
+    .filter((y): y is number => y !== undefined);
+
+  if (xs.length === 0 || ys.length === 0) {
+    return { x: 0, y: 0 };
+  }
+
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+
+  return {
+    x: (minX + maxX) / 2,
+    y: (minY + maxY) / 2,
+  };
+}

@@ -48,9 +48,6 @@ export const createFocusFlowOperation = () => ({
   flow: "focus",
 });
 
-export const createTransformToMBQCOperation = () => ({
-  transform: true,
-});
 
 export const createSimplifyOperation = () => ({
   simplify: true,

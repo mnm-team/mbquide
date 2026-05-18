@@ -1,15 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
 
-import QuantumCircuit from 'quantum-circuit';
+import QuantumCircuitViewer from '../components/QuantumCircuitViewer';
 
 import { QASMControls } from '../components/QASMControls';
 
 
 export default function QASMInputApp() {
   const [qasmInput, setQasmInput] = useState<string>('')
-  const [error, setError] = useState<string | null>(null)
-  const [circuitSvg, setCircuitSvg] = useState<string>('')
-  const svgContainerRef = useRef<HTMLDivElement>(null)
   const STORAGE_KEY = 'mbquide:qasmInput'
 
   // Restore QASM text when reloading the site.
@@ -35,37 +32,10 @@ export default function QASMInputApp() {
     return () => window.clearTimeout(timeoutId)
   }, [qasmInput])
 
-  useEffect(() => {
-    if (!qasmInput.trim()) {
-      setCircuitSvg('')
-      setError(null)
-      return
-    }
-
-    try {
-      const circuit = new QuantumCircuit()
-        circuit.importQASM(
-          qasmInput,
-          (_: any) => {
-            setCircuitSvg('');
-            setError(null);
-          },
-          false
-        );
-      const svg = circuit.exportSVG(true)
-      setCircuitSvg(svg)
-      setError(null)
-    } catch (err: any) {
-      setCircuitSvg('')
-      setError(null)
-    }
-  }, [qasmInput])
-
-
   return (
     <div className="flex h-screen w-screen overflow-hidden">
-      <div className="flex flex-1 flex-col min-w-0">
-        <div className="flex-[2] p-[30px] z-10">
+      <div className="flex h-full flex-1 flex-col min-w-0">
+        <div className="flex-[1] p-[30px] z-10">
           <h1 className="pb-5">Enter your QASM program</h1>
           <textarea
             rows={10}
@@ -76,29 +46,14 @@ export default function QASMInputApp() {
           />
         </div>
 
-        <div className="flex-1 p-[30px] flex flex-col min-h-0">
+        <div className="flex-[3] p-[30px] flex flex-col min-h-0">
           <div className="flex-1 overflow-auto min-h-0">
-            <div className="flex justify-center items-center min-h-full min-w-full">
-              <div
-                ref={svgContainerRef}
-                dangerouslySetInnerHTML={{ __html: circuitSvg }}
-                className="min-h-[50px] min-w-[100px]"
-              />
-              {!circuitSvg && !error && qasmInput.trim() && (
-                <p>Finish your input to see the circuit...</p>
-              )}
-              {!circuitSvg && !qasmInput.trim() && (
-                <p>Enter QASM code to see the circuit</p>
-              )}
+            <div className="w-fit mx-auto min-h-full flex items-center">
+              <QuantumCircuitViewer qasmInput={qasmInput} />
             </div>
           </div>
-          <p>
-            Powered by{" "}
-            <a target="_blank" href="https://github.com/quantastica/quantum-circuit">
-              Quantastica quantum-circuit
-            </a>
-          </p>
         </div>
+
       </div>
 
       {/* Controls */}

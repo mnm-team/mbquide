@@ -4,6 +4,15 @@ import { useNavigate } from "react-router-dom";
 import { ActionButton } from './Buttons';
 import { CodeIcon, MBQCIcon, MeasurementIcon, ZXIcon, actionIcon, undoIcon, redoIcon, flowIcon, focusIcon, resetIcon, RunAllIcon, simplificationIcon } from './Icons';
 
+type ControlButton = {
+  onClick?: () => void;
+  disabled?: boolean;
+  label: string;
+  sublabel?: string;
+  icon?: React.ReactNode;
+  show: boolean;
+};
+
 type ControlPanelProps = {
   selectedCount?: number;
   canUndo?: boolean;
@@ -76,13 +85,13 @@ export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
     onRunAll,
   } = props;
 
-  const navigationButtons = [
+  const navigationButtons: ControlButton[] = [
     { onClick: () => navigate("/QASM"), disabled: false, label: 'New QASM', sublabel: 'Input new Qasm', icon: <CodeIcon />, show: true, },
     { onClick: onTransformToZX, disabled: false, label: 'To ZX', sublabel: 'Transform to ZX', icon: <ZXIcon />, show: !!onTransformToZX, },
     { onClick: onTransformToMBQC, disabled: false, label: 'To MBQC', sublabel: 'Transform to MBQC', icon: <MBQCIcon />, show: !!onTransformToMBQC, },
   ];
 
-  const operationButtons = [
+  const operationButtons: ControlButton[] = [
     { onClick: onPrintNodes, disabled: selectedCount === 0, label: 'Print', show: !!onPrintNodes },
     { onClick: onSimplifyGraph, disabled: simplifyGraphDisabled, label: simplificationIcon + ' Simplify', sublabel: 'Automatically simplify the Graph', show: !!onSimplifyGraph },
     { onClick: onResetGraph, disabled: resetGraphDisabled, label: resetIcon + ' Clear', sublabel: 'Clear to empty Graph', show: !!onResetGraph },
@@ -95,19 +104,19 @@ export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
     // { onClick: onRelabelingPlanar, disabled: !areNonPlanar || selectedCount !== 1, label: actionIcon + ' Relabel Planar', sublabel: 'Relabel to planar basis', show: !!onRelabelingPlanar },
   ];
 
-  const undoButtons = [
+  const undoButtons: ControlButton[] = [
     { onClick: onUndo, disabled: !canUndo, label: undoIcon + ' Undo', show: !!onUndo },
     { onClick: onRedo, disabled: !canRedo, label: redoIcon + ' Redo', show: !!onRedo },
   ];
 
-  const simButtons = [
+  const simButtons: ControlButton[] = [
     { onClick: onGetFlow, disabled: false, label: flowIcon + ' Flow', sublabel: 'Get the Pauli Flow', show: !!onGetFlow },
     // { onClick: onFocusFlow, disabled: !flowFocusable, label: focusIcon + ' Focus', sublabel: 'Focus the Pauli Flow', show: !!onFocusFlow },
     { onClick: onSimulate, disabled: !simulatable, label: 'Simulate', sublabel: 'Simulate this graph flow', icon: <MeasurementIcon />, show: !!onSimulate },
     { onClick: onRunAll, disabled: !canRunAll, label: ' Run All', sublabel: 'Execute all remaining Steps', icon: <RunAllIcon />, show: !!onRunAll },
   ];
 
-  const renderButtonGroup = (buttons: typeof navigationButtons) => {
+  const renderButtonGroup = (buttons: ControlButton[]) => {
     const visibleButtons = buttons.filter(b => b.show);
 
     if (visibleButtons.length === 0) return null; // don't render empty groups
@@ -122,7 +131,6 @@ export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
         {visibleButtons.map((b, i) => (
           <div className='w-auto'>
             <ActionButton
-              key={i}
               onClick={b.onClick}
               disabled={b.disabled}
               label={b.label}
@@ -136,7 +144,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
   };
 
   return (
-    <div className="flex items-center justify-center gap-6 px-4 py-2">
+    <div className="flex max-w-[95vw] flex-wrap items-center justify-center gap-6 px-0 py-2">
       {renderButtonGroup(navigationButtons)}
       {renderButtonGroup(operationButtons)}
       {renderButtonGroup(undoButtons)}

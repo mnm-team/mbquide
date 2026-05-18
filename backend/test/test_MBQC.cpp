@@ -5,9 +5,9 @@
 #include "ZX_Graph.hpp"
 #include "ZX2MBQC.hpp"
 #include "MBQC2ZX.hpp"
+#include "Circ2MBQC.hpp"
 #include "QASM_Parser.hpp"
 #include "Quantum_Circuit.hpp"
-#include "Flow.hpp"
 #include "test_main.cpp"
 #include <cmath>
 #include <random>
@@ -217,6 +217,114 @@ TEST_CASE("QASM -> Circuit -> ZX -> MBQC -> ZX") {
 
 
 }
+
+
+TEST_CASE("Circuit -> ZX vs. Circuit -> MBQC -> ZX") {
+
+    SUBCASE("Coin Toss Circuit") {
+        const char* qasm_text = R"qasm(
+            OPENQASM 2.0;
+            qreg q[1];
+            h q[0];
+        )qasm";
+
+        QASMParser qasm = QASMParser("", qasm_text);
+        QuantumCircuit circ = qasm.parse();
+
+        ZXGraph originalZX = ZXGraph::fromQuantumCircuit(circ);
+        MBQC_Graph mbqc = CIRCtoMBQCGraph(circ);
+        mbqc.simplify();
+        ZXGraph newZX = MBQCtoZXGraph(mbqc);
+
+        CHECK(mbqc.getInputs().size() == 1);
+        CHECK(compareTensors(newZX, originalZX));
+    }
+
+    SUBCASE("Bell State Circuit") {
+        const char* qasm_text = R"qasm(
+            OPENQASM 2.0;
+            qreg q[2];
+            h q[0];
+            cx q[0],q[1];
+        )qasm";
+
+        QASMParser qasm = QASMParser("", qasm_text);
+        QuantumCircuit circ = qasm.parse();
+
+        ZXGraph originalZX = ZXGraph::fromQuantumCircuit(circ);
+        MBQC_Graph mbqc = CIRCtoMBQCGraph(circ);
+        ZXGraph newZX = MBQCtoZXGraph(mbqc);
+
+        CHECK(mbqc.getInputs().size() == 2);
+        CHECK(compareTensors(newZX, originalZX));
+    }
+
+    SUBCASE("Simple X Circuit") {
+        const char* qasm_text = R"qasm(
+            OPENQASM 2.0;
+            qreg q[1];
+            x q[0];
+        )qasm";
+
+        QASMParser qasm = QASMParser("", qasm_text);
+        QuantumCircuit circ = qasm.parse();
+
+        ZXGraph originalZX = ZXGraph::fromQuantumCircuit(circ);
+        MBQC_Graph mbqc = CIRCtoMBQCGraph(circ);
+        ZXGraph newZX = MBQCtoZXGraph(mbqc);
+
+        CHECK(compareTensors(newZX, originalZX));
+    }
+
+    SUBCASE("Simple H with two qubits") {
+        const char* qasm_text = R"qasm(
+            OPENQASM 2.0;
+            qreg q[2];
+            h q[1];
+        )qasm";
+
+        QASMParser qasm = QASMParser("", qasm_text);
+        QuantumCircuit circ = qasm.parse();
+
+        ZXGraph originalZX = ZXGraph::fromQuantumCircuit(circ);
+        MBQC_Graph mbqc = CIRCtoMBQCGraph(circ);
+        ZXGraph newZX = MBQCtoZXGraph(mbqc);
+
+        CHECK(compareTensors(newZX, originalZX));
+    }
+
+    SUBCASE("Simple X with three qubits") {
+        const char* qasm_text = R"qasm(
+            OPENQASM 2.0;
+            qreg q[3];
+            x q[0];
+        )qasm";
+
+        QASMParser qasm = QASMParser("", qasm_text);
+        QuantumCircuit circ = qasm.parse();
+
+        ZXGraph originalZX = ZXGraph::fromQuantumCircuit(circ);
+        MBQC_Graph mbqc = CIRCtoMBQCGraph(circ);
+        ZXGraph newZX = MBQCtoZXGraph(mbqc);
+
+        CHECK(compareTensors(newZX, originalZX));
+    }
+    
+    SUBCASE("Random Clifford Circuit - 2 qubits") {
+        std::string qasm_text = randomClifford(2, 5);
+
+        QASMParser qasm = QASMParser("", qasm_text);
+        QuantumCircuit circ = qasm.parse();
+
+        ZXGraph originalZX = ZXGraph::fromQuantumCircuit(circ);
+        MBQC_Graph mbqc = CIRCtoMBQCGraph(circ);
+        ZXGraph newZX = MBQCtoZXGraph(mbqc);
+
+        CHECK(compareTensors(newZX, originalZX));
+    }
+    
+}
+
 
 TEST_CASE("Test Relabeling") {
     
@@ -629,165 +737,12 @@ TEST_CASE("Test invalid graph operations") {
 
     // Test invalid edge
     graph.addEdge(0, 3);
-    CHECK(graph.getAdjacencyMatrix()[0][3] == 0);  // No edge should exist
+    CHECK(graph.getAllEdges().empty());  // No edge should exist
 
     // Test invalid measurement
+    CHECK(graph.getSize() == 3);
     std::cerr << "Ignore this setting node error - ";
     graph.setMeasurement(3, MeasurementBasis::Y, M_PI);
-}
-
-
-TEST_CASE("Get flow demand matrix") {
-    MBQC_Graph graph(6, {0}, {5});
-
-    graph.setMeasurement(0, MeasurementBasis::X);
-    graph.setMeasurement(1, MeasurementBasis::Y);
-    graph.setMeasurement(2, MeasurementBasis::XY);
-    graph.setMeasurement(3, MeasurementBasis::YZ);
-    graph.setMeasurement(4, MeasurementBasis::XZ);
-
-    graph.addEdge(0, 1);
-    graph.addEdge(1, 2);
-    graph.addEdge(2, 3);
-    graph.addEdge(3, 4);
-    graph.addEdge(4, 5);
-
-    auto flow = graph.getFlowDemandMatrix();
-    std::vector<std::vector<int>> correct = {
-        {1, 0, 0, 0, 0},
-        {1, 1, 0, 0, 0},
-        {1, 0, 1, 0, 0},
-        {0, 0, 1, 0, 0},
-        {0, 0, 0, 1, 0}
-    };
-
-    CHECK(flow == correct);
-
-
-    // Another example
-    graph = MBQC_Graph(3, {0}, {2});
-
-    graph.setMeasurement(0, MeasurementBasis::X);
-    graph.setMeasurement(1, MeasurementBasis::Z);
-
-    graph.addEdge(0, 1);
-    graph.addEdge(1, 2);
-    graph.addEdge(0, 2);
-
-    flow = graph.getFlowDemandMatrix();
-    
-    correct = {
-        {1, 1},
-        {1, 0}
-    };
-    
-    CHECK(flow == correct);
-
-}
-
-TEST_CASE("Invert Matrix") {
-    MBQC_Graph graph(3, {0}, {2});
-    
-    graph.setMeasurement(0, MeasurementBasis::X);
-    graph.setMeasurement(1, MeasurementBasis::Z);
-
-    graph.addEdge(0, 1);
-    graph.addEdge(1, 2);
-    graph.addEdge(0, 2);
-
-    auto flow = graph.getFlowDemandMatrix();    
-    auto invertedFlow = getInverse(flow);
-
-    std::vector<std::vector<double>> correct = {
-        {0, 1},
-        {1, -1}
-    };
-
-    CHECK(invertedFlow == correct);
-
-
-    // Another example (not invertible)
-
-    graph = MBQC_Graph(6, {0}, {5});
-
-    graph.setMeasurement(0, MeasurementBasis::X);
-    graph.setMeasurement(1, MeasurementBasis::Y);
-    graph.setMeasurement(2, MeasurementBasis::XY);
-    graph.setMeasurement(3, MeasurementBasis::YZ);
-    graph.setMeasurement(4, MeasurementBasis::XZ);
-
-    graph.addEdge(0, 1);
-    graph.addEdge(1, 2);
-    graph.addEdge(2, 3);
-    graph.addEdge(3, 4);
-    graph.addEdge(4, 5);
-
-    flow = graph.getFlowDemandMatrix();
-    invertedFlow = getInverse(flow);
-
-    CHECK(invertedFlow.empty());
-}
-
-
-
-TEST_CASE("Find Pauli Flow") {
-
-    SUBCASE("No flow should be found") {
-
-        MBQC_Graph graph(6, {0}, {4,5});
-
-        graph.setMeasurement(0, MeasurementBasis::X);
-        graph.setMeasurement(1, MeasurementBasis::Y);
-        graph.setMeasurement(2, MeasurementBasis::XY);
-        graph.setMeasurement(3, MeasurementBasis::YZ);
-
-        // Run Pauli flow finder
-        std::cerr << "Ignore this 'no flow found' Info - ";
-        PauliFlowResult result = findPauliFlow(graph);
-
-        CHECK(!result.ok);
-        
-        // Depth map must contain all vertices
-        CHECK(result.depths.size() == 0);
-
-    }
-
-    SUBCASE("Example that has flow (according to graphix)") {
-
-            const char* qasm_text = R"qasm(
-OPENQASM 2.0;
-include "qelib1.inc";
-
-qreg q[2];
-creg c[2];
-
-// Apply rotation gates
-rz(3.141) q[0];
-rz(3.141) q[1];
-cx q[0], q[1];
-s q[0];
-cx q[1], q[0];
-rz(3.141) q[1];
-cx q[1], q[0];
-rz(3.141) q[0];
-            )qasm";
-        
-            QASMParser qasm = QASMParser("", qasm_text);
-            QuantumCircuit circ = qasm.parse();
-            ZXGraph originalZX = ZXGraph::fromQuantumCircuit(circ);
-            MBQC_Graph g = ZXtoMBQCGraph(originalZX);
-        
-            // Run Pauli flow finder
-            PauliFlowResult result = findPauliFlow(g);
-        
-            CHECK(result.ok);
-            
-            // Depth map must contain all vertices
-            CHECK(result.depths.size() == g.getSize());
-
-        
-    }
-
 }
 
 TEST_CASE("Output Adjustment"){

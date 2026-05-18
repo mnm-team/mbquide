@@ -24,6 +24,7 @@ private:
     int totalNodes;
     int numInputNodes;
     int maxVecSizeJSON;
+    bool conveyorBelt;
     std::string inputStateString;
     StatevectorSimulator statevectorSimulator;
 
@@ -218,11 +219,12 @@ private:
     }
     
     
+
     
 public:
     Simulator() = default;
-    Simulator(const MBQC_Graph& g, const PauliFlowResult& flow, bool random = true, std::string inputState = "", int maxVecSizeJSON = 128)
-        : graph(g.clone()), flow(flow), randomMeasurements(random), inputStateString(inputState), maxVecSizeJSON(maxVecSizeJSON)
+    Simulator(const MBQC_Graph& g, const PauliFlowResult& flow, bool random = true, std::string inputState = "", int maxVecSizeJSON = 128, bool conveyorBelt = true)
+        : graph(g.clone()), flow(flow), randomMeasurements(random), inputStateString(inputState), maxVecSizeJSON(maxVecSizeJSON), conveyorBelt(conveyorBelt)
     {
         if (!flow.ok) {
             std::cerr << "Cannot create simulator from bad pauli flow!\n";
@@ -257,7 +259,7 @@ public:
             readyToMeasure.insert(i);
         } 
         
-        activateAllNecessary();
+        conveyorBelt ? activateAllNecessary() : activateAll();
 
     }
 
@@ -370,6 +372,17 @@ public:
         activeEdges.insert({u,v});
     }
 
+    // Activates ALL nodes and edges
+    void activateAll() {
+        for (int r = 0; r < totalNodes; r++) {
+            activateNode(r);
+            for (int n : graph.getNeighbors(r)) {
+                activateNode(n);
+                activateEdge(r, n);
+            }
+        }
+    }
+
     // Activates all necessary nodes based on the readyToMEasure
     void activateAllNecessary() {
         for (int r : readyToMeasure) {
@@ -390,7 +403,7 @@ public:
         }
 
         std::vector<int> inputs = graph.getInputs();
-        std::sort(inputs.begin(), inputs.end());
+        std::sort(inputs.begin(), inputs.end(), std::greater<int>());
         
         qubitToGraphNode.reserve(numInputNodes);
         for (int i : inputs) {
@@ -462,7 +475,7 @@ public:
         // Recompute ready nodes
         recomputeReadyToMeasure(nodeId);
 
-        activateAllNecessary();
+        if (conveyorBelt) activateAllNecessary();
 
         return true;
     }
@@ -492,6 +505,33 @@ public:
             }
         }
         oa.reset();
+    }
+
+    // Reorders the statevector qubits so that the output node with the
+    // lowest graph node ID sits at bit 0 (rightmost in the bitstring).
+    // Call this once simulation is complete.
+    void reorderOutputQubits() {
+        int n = (int)qubitToGraphNode.size();
+
+        // Build a sorted list of (nodeId, currentQubitIndex)
+        std::vector<std::pair<int,int>> nodeToQubit(n);
+        for (int q = 0; q < n; ++q)
+            nodeToQubit[q] = {qubitToGraphNode[q], q};
+
+        // Sort by node ID ascending: lowest node ID should end up at bit 0
+        std::sort(nodeToQubit.begin(), nodeToQubit.end());
+
+        // permutation[new_qubit] = old_qubit
+        // new qubit 0 (LSB) = the qubit currently holding the lowest node ID
+        std::vector<int> permutation(n);
+        for (int new_q = 0; new_q < n; ++new_q)
+            permutation[new_q] = nodeToQubit[new_q].second;
+
+        statevectorSimulator.reorderQubits(permutation);
+
+        // Update qubitToGraphNode to reflect the new ordering
+        for (int new_q = 0; new_q < n; ++new_q)
+            qubitToGraphNode[new_q] = nodeToQubit[new_q].first;
     }
 
 
@@ -525,6 +565,7 @@ public:
                 return;
             }
         }
+        reorderOutputQubits();
     }
 
     std::string runAndGetOutput() {
