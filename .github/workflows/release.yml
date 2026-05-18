@@ -1,0 +1,178 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  # ── Build frontend once, share as artifact ──────────────────────────────────
+  build-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install & build
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Upload dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist/
+
+  # ── Build backend on each platform ─────────────────────────────────────────
+  build-backend:
+    needs: build-frontend
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: linux
+            exe: Server
+            archive_cmd: tar -czf ../mbqc-${{ github.ref_name }}-linux.tar.gz Server dist launch.sh
+            archive_name: mbqc-linux.tar.gz
+
+          - os: macos-latest
+            name: macos
+            exe: Server
+            archive_cmd: tar -czf ../mbqc-${{ github.ref_name }}-macos.tar.gz Server dist launch.sh
+            archive_name: mbqc-macos.tar.gz
+
+          - os: windows-latest
+            name: windows
+            exe: Server.exe
+            archive_cmd: 7z a ..\mbqc-${{ github.ref_name }}-windows.zip Server.exe dist launch.bat
+            archive_name: mbqc-windows.zip
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Platform deps ────────────────────────────────────────────────────────
+      - name: Install dependencies (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build \
+            libboost-all-dev libssl-dev
+
+      - name: Install dependencies (macOS)
+        if: matrix.os == 'macos-latest'
+        run: brew install cmake ninja boost openssl
+
+      - name: Install dependencies (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          choco install cmake ninja -y
+          # Boost via vcpkg (pre-installed on GH runners)
+          vcpkg install boost-asio openssl --triplet x64-windows
+          echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
+
+      # ── Build backend ────────────────────────────────────────────────────────
+      - name: Configure (Linux / macOS)
+        if: matrix.os != 'windows-latest'
+        run: |
+          cmake -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -S backend -B backend/build
+
+      - name: Configure (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          cmake -G Ninja `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET=x64-windows `
+            -S backend -B backend/build
+
+      - name: Build
+        run: cmake --build backend/build --config Release
+
+      # ── Download frontend dist ───────────────────────────────────────────────
+      - name: Download frontend dist
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: backend/build/dist
+
+      # ── Write launcher scripts ───────────────────────────────────────────────
+      - name: Write launcher (Linux / macOS)
+        if: matrix.os != 'windows-latest'
+        working-directory: backend/build
+        run: |
+          cat > launch.sh << 'EOF'
+          #!/bin/bash
+          DIR="$(cd "$(dirname "$0")" && pwd)"
+          cd "$DIR"
+          echo "Starting server on http://localhost:18080 ..."
+          ./Server
+          EOF
+          chmod +x launch.sh
+
+      - name: Write launcher (Windows)
+        if: matrix.os == 'windows-latest'
+        working-directory: backend/build
+        shell: pwsh
+        run: |
+          @"
+          @echo off
+          cd /d "%~dp0"
+          echo Starting server on http://localhost:18080 ...
+          start http://localhost:18080
+          Server.exe
+          "@ | Set-Content launch.bat
+
+      # ── Package everything ───────────────────────────────────────────────────
+      - name: Package (Linux / macOS)
+        if: matrix.os != 'windows-latest'
+        working-directory: backend/build
+        run: ${{ matrix.archive_cmd }}
+
+      - name: Package (Windows)
+        if: matrix.os == 'windows-latest'
+        working-directory: backend/build
+        shell: pwsh
+        run: ${{ matrix.archive_cmd }}
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-${{ matrix.name }}
+          path: ${{ matrix.archive_name }}
+
+  # ── Create GitHub Release and attach all packages ──────────────────────────
+  release:
+    needs: build-backend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: package-*
+          merge-multiple: true
+          path: packages/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}   # e.g. v1.0.0-beta → prerelease
+          generate_release_notes: true
+          files: packages/*
