@@ -44,19 +44,19 @@ jobs:
             name: linux
             exe: Server
             archive_cmd: tar -czf ../mbqc-${{ github.ref_name }}-linux.tar.gz Server dist launch.sh
-            archive_name: mbqc-linux.tar.gz
+            archive_name: mbqc-${{ github.ref_name }}-linux.tar.gz
 
           - os: macos-latest
             name: macos
             exe: Server
             archive_cmd: tar -czf ../mbqc-${{ github.ref_name }}-macos.tar.gz Server dist launch.sh
-            archive_name: mbqc-macos.tar.gz
+            archive_name: mbqc-${{ github.ref_name }}-macos.tar.gz
 
           - os: windows-latest
             name: windows
             exe: Server.exe
             archive_cmd: 7z a ..\mbqc-${{ github.ref_name }}-windows.zip Server.exe dist launch.bat
-            archive_name: mbqc-windows.zip
+            archive_name: mbqc-${{ github.ref_name }}-windows.zip
 
     runs-on: ${{ matrix.os }}
 
