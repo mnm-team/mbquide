@@ -402,7 +402,7 @@ int main() {
     // Serve static frontend files
     CROW_ROUTE(app, "/<path>")
     ([](const crow::request& /*req*/, crow::response& res, std::string path) {
-        const std::string dist = "./dist";
+        const std::string dist = "./frontend/dist";
 
         // Sanitize path traversal
         if (path.find("..") != std::string::npos) {
@@ -434,7 +434,9 @@ int main() {
     CROW_ROUTE(app, "/")
     ([]() {
         crow::response res;
-        auto content = read_file("./dist/index.html");
+        const std::string dist = "./frontend/dist";
+
+        auto content = read_file(dist + "/index.html");
 
         if (content) {
             res.set_header("Content-Type", "text/html");

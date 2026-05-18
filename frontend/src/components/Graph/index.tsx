@@ -89,7 +89,7 @@ export function MBQC_Graph({
       x: 960 - center.x,
       y: 540 - center.y,
     });
-  }, [centerGraphTrigger, mainNodes, setTranslate]);
+  }, [centerGraphTrigger, setTranslate]);
 
   // Keep ref in sync with state
   useEffect(() => {
