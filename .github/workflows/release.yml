@@ -43,19 +43,19 @@ jobs:
           - os: ubuntu-latest
             name: linux
             exe: Server
-            archive_cmd: tar -czf ../mbqc-${{ github.ref_name }}-linux.tar.gz Server ../frontend/dist launch.sh
+            archive_cmd: tar -czf ../mbqc-${{ github.ref_name }}-linux.tar.gz Server dist launch.sh
             archive_name: mbqc-linux.tar.gz
 
           - os: macos-latest
             name: macos
             exe: Server
-            archive_cmd: tar -czf ../mbqc-${{ github.ref_name }}-macos.tar.gz Server ../frontend/dist launch.sh
+            archive_cmd: tar -czf ../mbqc-${{ github.ref_name }}-macos.tar.gz Server dist launch.sh
             archive_name: mbqc-macos.tar.gz
 
           - os: windows-latest
             name: windows
             exe: Server.exe
-            archive_cmd: 7z a ..\mbqc-${{ github.ref_name }}-windows.zip Server.exe ..\frontend\dist launch.bat
+            archive_cmd: 7z a ..\mbqc-${{ github.ref_name }}-windows.zip Server.exe dist launch.bat
             archive_name: mbqc-windows.zip
 
     runs-on: ${{ matrix.os }}
@@ -111,6 +111,14 @@ jobs:
           name: frontend-dist
           path: frontend/dist
 
+      # ── Copy frontend dist to backend build directory ─────────────────────────
+      - name: Copy frontend dist to build directory
+        working-directory: backend/build
+        run: |
+          # Ensure the dist folder exists in the build dir
+          mkdir -p dist
+          cp -r ../frontend/dist/* ./dist/
+      
       # ── Write launcher scripts ───────────────────────────────────────────────
       - name: Write launcher (Linux / macOS)
         if: matrix.os != 'windows-latest'
