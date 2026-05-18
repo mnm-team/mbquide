@@ -17,6 +17,19 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(eigen)
 
 # -----------------------------
+# Asio
+# -----------------------------
+FetchContent_Declare(
+    asio
+    GIT_REPOSITORY https://github.com/chriskohlhoff/asio.git
+    GIT_TAG asio-1-38-0
+)
+FetchContent_MakeAvailable(asio)
+
+add_library(asio INTERFACE)
+target_include_directories(asio INTERFACE ${asio_SOURCE_DIR}/asio/include)
+
+# -----------------------------
 # nlohmann/json
 # -----------------------------
 FetchContent_Declare(
@@ -87,6 +100,7 @@ target_link_libraries(mbquide_core
 PUBLIC
     Eigen3::Eigen
     Boost::graph
+    asio
     nlohmann_json::nlohmann_json
 )
 
