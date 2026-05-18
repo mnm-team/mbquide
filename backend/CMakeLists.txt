@@ -102,6 +102,8 @@ PUBLIC
     Boost::graph
     asio
     nlohmann_json::nlohmann_json
+    # Only link ws2_32 on Windows
+    $<$<OS:Windows>:ws2_32>
 )
 
 target_include_directories(mbquide_core PUBLIC include)
@@ -115,6 +117,8 @@ target_link_libraries(Server
 PRIVATE
     mbquide_core
     Crow::Crow
+    # Only link ws2_32 on Windows
+    $<$<OS:Windows>:ws2_32>
 )
 
 # -----------------------------
