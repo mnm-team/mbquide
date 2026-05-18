@@ -130,9 +130,10 @@ type ExampleButtonProps = {
   label: string;
   description: string;
   qubits: string;
+  description_link?: string;
 };
 
-export function ExampleButton({ onClick, label, description, qubits }: ExampleButtonProps) {
+export function ExampleButton({ onClick, label, description, qubits, description_link }: ExampleButtonProps) {
   return (
     <button
       onClick={onClick}
@@ -162,6 +163,21 @@ export function ExampleButton({ onClick, label, description, qubits }: ExampleBu
 
         <p className="text-[11px] text-gray-500 mt-0.5">
           {description}
+
+          {description_link && (
+            <>
+              {" "}
+              <a
+                href={description_link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[10px] text-blue-600 hover:text-blue-700 underline"
+                onClick={(e) => e.stopPropagation()}
+              >
+                → Learn more
+              </a>
+            </>
+          )}
         </p>
       </div>
     </button>
