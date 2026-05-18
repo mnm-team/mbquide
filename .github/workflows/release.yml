@@ -80,7 +80,7 @@ jobs:
         run: |
           choco install cmake ninja -y
           # Boost via vcpkg (pre-installed on GH runners)
-          vcpkg install boost-asio openssl --triplet x64-windows
+          vcpkg install boost-asio asio openssl --triplet x64-windows
           echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
 
       # ── Build backend ────────────────────────────────────────────────────────
@@ -99,6 +99,7 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release `
             -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
             -DVCPKG_TARGET_TRIPLET=x64-windows `
+            -DASIO_INCLUDE_DIR="$env:VCPKG_ROOT/installed/x64-windows/include" `
             -S backend -B backend/build
 
       - name: Build
