@@ -110,14 +110,6 @@ jobs:
         with:
           name: frontend-dist
           path: frontend/dist
-
-      # ── Copy frontend dist to backend build directory ─────────────────────────
-      - name: Copy frontend dist to build directory
-        working-directory: backend/build
-        run: |
-          # Ensure the dist folder exists in the build dir
-          mkdir -p dist
-          cp -r ../frontend/dist/* ./dist/
       
       # ── Write launcher scripts ───────────────────────────────────────────────
       - name: Write launcher (Linux / macOS)
