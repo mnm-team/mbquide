@@ -448,11 +448,5 @@ int main() {
         return res;
     });
 
-    std::thread([](){
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
-        std::system("xdg-open http://localhost:18080");
-    }).detach();
-
-    std::cout << "Crow server starting on http://localhost:18080...\n";
     app.port(18080).multithreaded().run();
 }

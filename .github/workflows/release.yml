@@ -39,12 +39,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-20.04
-            name: linux-ubuntu20
-            exe: Server
-            archive_cmd: tar -czf ../../mbquide-${{ github.ref_name }}-linux-ubuntu20.tar.gz Server frontend launch.sh
-            archive_name: mbquide-${{ github.ref_name }}-linux-ubuntu20.tar.gz
-
           - os: ubuntu-22.04
             name: linux-ubuntu22
             exe: Server
@@ -56,12 +50,6 @@ jobs:
             exe: Server
             archive_cmd: tar -czf ../../mbquide-${{ github.ref_name }}-linux-ubuntu24.tar.gz Server frontend launch.sh
             archive_name: mbquide-${{ github.ref_name }}-linux-ubuntu24.tar.gz
-
-          - os: ubuntu-26.04
-            name: linux-ubuntu26
-            exe: Server
-            archive_cmd: tar -czf ../../mbquide-${{ github.ref_name }}-linux-ubuntu26.tar.gz Server frontend launch.sh
-            archive_name: mbquide-${{ github.ref_name }}-linux-ubuntu26.tar.gz
 
           - os: macos-latest
             name: macos
@@ -146,7 +134,11 @@ jobs:
           DIR="$(cd "$(dirname "$0")" && pwd)"
           cd "$DIR"
           echo "Starting server on http://localhost:18080 ..."
-          ./Server
+          ./Server &
+          SERVER_PID=$!
+          sleep 1
+          xdg-open http://localhost:18080 2>/dev/null || open http://localhost:18080 2>/dev/null
+          wait $SERVER_PID
           EOF
           chmod +x launch.sh
 
@@ -159,8 +151,9 @@ jobs:
           @echo off
           cd /d "%~dp0"
           echo Starting server on http://localhost:18080 ...
+          start "" Server.exe
+          timeout /t 2 /nobreak >nul
           start http://localhost:18080
-          Server.exe
           "@ | Set-Content launch.bat
 
       # ── Package everything ───────────────────────────────────────────────────
