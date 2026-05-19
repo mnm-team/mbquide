@@ -117,6 +117,7 @@ if(WIN32)
      mbquide_core
      Crow::Crow
      ws2_32
+     wsock32
  )
 else()
  target_link_libraries(Server
