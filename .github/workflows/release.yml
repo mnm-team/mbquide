@@ -40,23 +40,41 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
-            name: linux
+          - os: ubuntu-20.04
+            name: linux-ubuntu20
             exe: Server
-            archive_cmd: tar -czf ../../mbqc-${{ github.ref_name }}-linux.tar.gz Server dist launch.sh
-            archive_name: mbqc-${{ github.ref_name }}-linux.tar.gz
+            archive_cmd: tar -czf ../../mbquide-${{ github.ref_name }}-linux-ubuntu20.tar.gz Server dist launch.sh
+            archive_name: mbquide-${{ github.ref_name }}-linux-ubuntu20.tar.gz
+
+          - os: ubuntu-22.04
+            name: linux-ubuntu22
+            exe: Server
+            archive_cmd: tar -czf ../../mbquide-${{ github.ref_name }}-linux-ubuntu22.tar.gz Server dist launch.sh
+            archive_name: mbquide-${{ github.ref_name }}-linux-ubuntu22.tar.gz
+
+          - os: ubuntu-24.04
+            name: linux-ubuntu24
+            exe: Server
+            archive_cmd: tar -czf ../../mbquide-${{ github.ref_name }}-linux-ubuntu24.tar.gz Server dist launch.sh
+            archive_name: mbquide-${{ github.ref_name }}-linux-ubuntu24.tar.gz
+
+          - os: ubuntu-26.04
+            name: linux-ubuntu26
+            exe: Server
+            archive_cmd: tar -czf ../../mbquide-${{ github.ref_name }}-linux-ubuntu26.tar.gz Server dist launch.sh
+            archive_name: mbquide-${{ github.ref_name }}-linux-ubuntu26.tar.gz
 
           - os: macos-latest
             name: macos
             exe: Server
-            archive_cmd: tar -czf ../../mbqc-${{ github.ref_name }}-macos.tar.gz Server dist launch.sh
-            archive_name: mbqc-${{ github.ref_name }}-macos.tar.gz
+            archive_cmd: tar -czf ../../mbquide-${{ github.ref_name }}-macos.tar.gz Server dist launch.sh
+            archive_name: mbquide-${{ github.ref_name }}-macos.tar.gz
 
           - os: windows-latest
             name: windows
             exe: Server.exe
-            archive_cmd: 7z a ..\..\mbqc-${{ github.ref_name }}-windows.zip Server.exe dist launch.bat
-            archive_name: mbqc-${{ github.ref_name }}-windows.zip
+            archive_cmd: 7z a ..\..\mbquide-${{ github.ref_name }}-windows.zip Server.exe dist launch.bat
+            archive_name: mbquide-${{ github.ref_name }}-windows.zip
 
     runs-on: ${{ matrix.os }}
 
@@ -65,7 +83,7 @@ jobs:
 
       # ── Platform deps ────────────────────────────────────────────────────────
       - name: Install dependencies (Linux)
-        if: matrix.os == 'ubuntu-latest'
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y cmake ninja-build \
@@ -79,13 +97,12 @@ jobs:
         if: matrix.os == 'windows-latest'
         run: |
           choco install cmake ninja -y
-          # Boost via vcpkg (pre-installed on GH runners)
           vcpkg install boost-graph asio openssl --triplet x64-windows
           echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
 
       # ── Build backend ────────────────────────────────────────────────────────
       - name: Configure (Linux / macOS)
-        if: matrix.os != 'windows-latest'
+        if: runner.os != 'Windows'
         run: |
           cmake -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
@@ -100,6 +117,7 @@ jobs:
             -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
             -DVCPKG_TARGET_TRIPLET=x64-windows `
             -DASIO_INCLUDE_DIR="$env:VCPKG_ROOT/installed/x64-windows/include" `
+            -DCMAKE_EXE_LINKER_FLAGS="-static -static-libgcc -static-libstdc++" `
             -S backend -B backend/build
 
       - name: Build
@@ -116,13 +134,12 @@ jobs:
       - name: Copy frontend dist to build directory
         working-directory: backend/build
         run: |
-          # Ensure the dist folder exists in the build dir
-          mkdir -p dist
-          cp -r ../../frontend/dist/* ./dist/
+          mkdir -p ./frontend/dist
+          cp -r ../../frontend/dist/* ./frontend/dist/
 
       # ── Write launcher scripts ───────────────────────────────────────────────
       - name: Write launcher (Linux / macOS)
-        if: matrix.os != 'windows-latest'
+        if: runner.os != 'Windows'
         working-directory: backend/build
         run: |
           cat > launch.sh << 'EOF'
@@ -149,7 +166,7 @@ jobs:
 
       # ── Package everything ───────────────────────────────────────────────────
       - name: Package (Linux / macOS)
-        if: matrix.os != 'windows-latest'
+        if: runner.os != 'Windows'
         working-directory: backend/build
         run: ${{ matrix.archive_cmd }}
 
@@ -182,6 +199,6 @@ jobs:
         with:
           name: Release ${{ github.ref_name }}
           draft: false
-          prerelease: ${{ contains(github.ref_name, '-') }}   # e.g. v1.0.0-beta → prerelease
+          prerelease: ${{ contains(github.ref_name, '-') }}
           generate_release_notes: true
           files: packages/*
