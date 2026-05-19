@@ -148,12 +148,11 @@ jobs:
         shell: pwsh
         run: |
           @"
-          @echo off
-          cd /d "%~dp0"
-          echo Starting server on http://localhost:18080 ...
-          start "" Server.exe
-          timeout /t 2 /nobreak >nul
+          @Echo off
+          Pushd "%~dp0"
           start http://localhost:18080
+          Server.exe
+          popd
           "@ | Set-Content launch.bat
 
       # ── Package everything ───────────────────────────────────────────────────
