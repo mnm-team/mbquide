@@ -112,14 +112,19 @@ target_include_directories(mbquide_core PUBLIC include)
 add_executable(Server src/server.cpp)
 
 if(WIN32)
-  target_link_libraries(Server ws2_32)
+ target_link_libraries(Server
+ PRIVATE
+     mbquide_core
+     Crow::Crow
+     ws2_32
+ )
+else()
+ target_link_libraries(Server
+ PRIVATE
+     mbquide_core
+     Crow::Crow
+ )
 endif()
-
-target_link_libraries(Server
-PRIVATE
-    mbquide_core
-    Crow::Crow
-)
 
 # -----------------------------
 # Tests
