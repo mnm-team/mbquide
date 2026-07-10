@@ -1,6 +1,5 @@
 import { useState, useCallback } from 'react';
-import { NodeType, Edge, OutputAdjustment, GraphState } from '../types';
-import { LayerLine } from '../utils/positioning';
+import { NodeType, Edge, OutputAdjustment, GraphState, LayerLine } from '../types';
 
 export const useGraphState = () => {
   const [selectedNodes, setSelectedNodes] = useState<NodeType[]>([]);
@@ -15,12 +14,15 @@ export const useGraphState = () => {
   const [flowLayerLines, setFlowLayerLines] = useState<LayerLine[] | null>(null);
 
   const getCurrentState = useCallback((): GraphState => ({
-    nodes: [...nodes],
+    nodes: nodes.map(node => ({ ...node })),
     edges: [...edges],
     inputs: [...inputs],
     outputs: [...outputs],
     adjustments: { ...adjustments },
-  }), [nodes, edges, inputs, outputs, adjustments]);
+    flowLayerLines: flowLayerLines ? flowLayerLines.map(line => ({ ...line })) : null,
+    simulatable,
+    flowFocusable,
+  }), [nodes, edges, inputs, outputs, adjustments, flowLayerLines, simulatable, flowFocusable]);
 
   const updateState = useCallback((state: Partial<GraphState>) => {
     if (state.nodes !== undefined) setNodes(state.nodes);
@@ -28,6 +30,9 @@ export const useGraphState = () => {
     if (state.inputs !== undefined) setInputs(state.inputs);
     if (state.outputs !== undefined) setOutputs(state.outputs);
     if (state.adjustments !== undefined) setAdjustments(state.adjustments);
+    if (state.flowLayerLines !== undefined) setFlowLayerLines(state.flowLayerLines);
+    if (state.simulatable !== undefined) setSimulatable(state.simulatable);
+    if (state.flowFocusable !== undefined) setFlowFocusable(state.flowFocusable);
   }, []);
 
   return {

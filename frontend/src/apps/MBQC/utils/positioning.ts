@@ -1,4 +1,6 @@
-import { NodeType, Edge } from '../types';
+import { NodeType, Edge, LayerLine } from '../types';
+
+export type { LayerLine };
 
 export const LAYOUT_CONFIG = {
   H_GAP: 200, // horizontal spacing between nodes
@@ -10,12 +12,6 @@ export const LAYOUT_CONFIG = {
   LAYER_JITTER_X: 30, // random x offset within a layer, so edges don't overlap perfectly
   LAYER_JITTER_Y: 20, // random y offset within a layer
 } as const;
-
-export type LayerLine = {
-  x: number;
-  y1: number;
-  y2: number;
-};
 
 
 export const getNodePosition = (

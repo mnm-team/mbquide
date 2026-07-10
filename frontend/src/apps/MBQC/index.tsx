@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MBQC_Graph } from '../../components/Graph';
 import LoadingOverlay from '../../components/LoadingOverlay';
-import { Edge, NodeType, OutputAdjustment, emptyOutputAdjustment } from './types';
+import { Edge, NodeType, OutputAdjustment, emptyOutputAdjustment, HistoryState } from './types';
 import { useGraphState } from './hooks/useGraphState';
 import { useGraphHistory } from './hooks/useGraphHistory';
 import { useGraphApi } from './hooks/useGraphApi';
@@ -98,7 +98,6 @@ export default function MBQC_App() {
     const previousState = undoHistory(getCurrentState());
     if (previousState) {
       updateState(previousState);
-      setFlowLayerLines(null);
       writeGraph(
         previousState.nodes,
         previousState.edges,
@@ -107,13 +106,12 @@ export default function MBQC_App() {
         previousState.adjustments
       );
     }
-  }, [undoHistory, getCurrentState, updateState, setFlowLayerLines, writeGraph]);
+  }, [undoHistory, getCurrentState, updateState, writeGraph]);
 
   const handleRedo = useCallback(() => {
     const nextState = redoHistory(getCurrentState());
     if (nextState) {
       updateState(nextState);
-      setFlowLayerLines(null);
       writeGraph(
         nextState.nodes,
         nextState.edges,
@@ -122,7 +120,7 @@ export default function MBQC_App() {
         nextState.adjustments
       );
     }
-  }, [redoHistory, getCurrentState, updateState, setFlowLayerLines, writeGraph]);
+  }, [redoHistory, getCurrentState, updateState, writeGraph]);
 
   // Effect: Fetch graph
   useEffect(() => {
@@ -246,6 +244,8 @@ export default function MBQC_App() {
         console.log(`\tCorrf: ${JSON.stringify(flow.corrf)}`);
         console.log(`\tOdd neigbors corrf: ${JSON.stringify(flow.oddNcorrf)}`);
         console.log(`\tDepths: ${JSON.stringify(flow.depths)}`);
+        // Preserve the pre-flow layout so undo can remove the flow again.
+        saveCurrentStateToHistory();
         orderNodesByFlow(flow.depths, flow.corrf, flow.oddNcorrf);
         setCenterGraphTrigger(prev => prev + 1);
         setFlowFocusable(true);
@@ -257,7 +257,7 @@ export default function MBQC_App() {
     } catch (error) {
       console.error('Error getting flow information:', error);
     }
-  }, [orderNodesByFlow, setFlowFocusable, setSimulatable]);
+  }, [orderNodesByFlow, setFlowFocusable, setSimulatable, saveCurrentStateToHistory]);
 
   const handleFocusFlow = useCallback(async () => {
     try {
@@ -276,6 +276,8 @@ export default function MBQC_App() {
 
       if (flow?.ok) {
         setFlowFocusable(false);
+        // Preserve the pre-focus layout so undo can revert to it.
+        saveCurrentStateToHistory();
         orderNodesByFlow(flow.depths, flow.corrf, flow.oddNcorrf);
       } else {
         console.log('The graph has no flow after focus operation!');
@@ -284,16 +286,27 @@ export default function MBQC_App() {
     } catch (error) {
       console.error('Error focusing flow:', error);
     }
-  }, [orderNodesByFlow, setFlowFocusable]);
+  }, [orderNodesByFlow, setFlowFocusable, saveCurrentStateToHistory]);
 
-  // Dragging a node across a flow-layer boundary invalidates the flow
+  // Snapshot taken at drag-start, so that if the drag destroys the flow the correct state is pushed onto the undo stack (the graph state at drag-end already reflects the crossed-over position, since dragging mutates nodes in place).
+  const dragStartSnapshotRef = useRef<HistoryState | null>(null);
+
+  const handleNodeDragStart = useCallback(() => {
+    dragStartSnapshotRef.current = getCurrentState();
+  }, [getCurrentState]);
+
+  // Dragging a node across a flow-layer boundary invalidates the flow.
   const handleNodeDragEnd = useCallback((draggedNodes: NodeType[]) => {
     if (!flowLayerLines) return;
     if (hasNodeCrossedLayer(draggedNodes, flowLayerLines)) {
+      if (dragStartSnapshotRef.current) {
+        saveToHistory(dragStartSnapshotRef.current);
+        dragStartSnapshotRef.current = null;
+      }
       setFlowLayerLines(null);
       setSimulatable(false);
     }
-  }, [flowLayerLines, setFlowLayerLines, setSimulatable]);
+  }, [flowLayerLines, setFlowLayerLines, setSimulatable, saveToHistory]);
 
   const handleNodeDrop = useCallback(async (
     droppedNode?: NodeType,
@@ -501,6 +514,7 @@ export default function MBQC_App() {
           runRelabeling={handleRelabeling}
           runRelabelingPlanar={handleRelabelingPlanar}
           onNodeDrop={handleNodeDrop}
+          onNodeDragStart={handleNodeDragStart}
           onNodeDragEnd={handleNodeDragEnd}
           onNodeDelete={handleNodeDelete}
           onCreateNewEdge={handleEdgeCreation}

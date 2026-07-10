@@ -43,6 +43,7 @@ export type GraphProps = {
   outputAdjustments?: Record<string, OutputAdjustment>;
   onSelectionChange?: (selected: NodeType[]) => void;
   onNodeDrop?: (node?: NodeType, x?: number, y?: number, isInput?: boolean) => void;
+  onNodeDragStart?: () => void;
   onNodeDragEnd?: (nodes: NodeType[]) => void;
   onNodeDelete?: (nodes?: NodeType[]) => void;
   onCreateNewEdge?: (edge?: Edge) => void;

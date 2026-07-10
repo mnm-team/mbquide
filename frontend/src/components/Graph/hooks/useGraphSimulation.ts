@@ -27,6 +27,7 @@ type UseGraphSimulationProps = {
   contextMenu?: ContextMenuState;
   onSelectionChange?: (selected: NodeType[]) => void;
   onNodeDrop?: (node?: NodeType, x?: number, y?: number, isInput?: boolean) => void;
+  onNodeDragStart?: () => void;
   onNodeDragEnd?: (nodes: NodeType[]) => void;
   onNodeDelete?: (nodes?: NodeType[]) => void;
   onCreateNewEdge?: (edge?: Edge) => void;
@@ -50,6 +51,7 @@ export const useGraphSimulation = ({
   contextMenu,
   onSelectionChange,
   onNodeDrop,
+  onNodeDragStart,
   onNodeDragEnd,
   onNodeDelete,
   onCreateNewEdge,
@@ -198,7 +200,7 @@ export const useGraphSimulation = ({
       .data(mainNodes)
       .join("g")
       .attr("class", "node")
-      .call(createNodeDragBehavior(simulation, selectedNodesRef, setSelectedNodes, onSelectionChange, onNodeDragEnd) as any);
+      .call(createNodeDragBehavior(simulation, selectedNodesRef, setSelectedNodes, onSelectionChange, onNodeDragEnd, onNodeDragStart) as any);
 
     applyNodeInteractions(
       node,

@@ -19,6 +19,7 @@ export function MBQC_Graph({
   runRelabeling,
   runRelabelingPlanar,
   onNodeDrop,
+  onNodeDragStart,
   onNodeDragEnd,
   onNodeDelete,
   onCreateNewEdge,
@@ -67,6 +68,7 @@ export function MBQC_Graph({
     onNodeDoubleClick: handleNodeDoubleClick,
     outputAdjustments,
     flowLayerLines,
+    onNodeDragStart,
     onNodeDragEnd,
   });
 
