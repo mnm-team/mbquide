@@ -15,6 +15,7 @@ export type SimulatorGraphProps = {
   width: number;
   height: number;
   flowLayerLines?: LayerLine[] | null;
+  centerGraphTrigger?: number;
 };
 
 export type { NodeType, Edge, SimEdge, OutputAdjustment, LayerLine };

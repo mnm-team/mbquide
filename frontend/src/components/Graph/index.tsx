@@ -4,6 +4,7 @@ import { useGraphSimulation } from './hooks/useGraphSimulation';
 import { useContextMenu } from './hooks/useContextMenu';
 import { ContextMenu } from './ui/ContextMenu';
 import { PhaseInputModal } from './ui/phaseInputMode';
+import { RecenterHint } from './ui/RecenterHint';
 import { BACKGROUND_COLOR } from './utils/colors';
 import { getBoundingCenter } from './utils/functions';
 import { useSvgPan } from './hooks/useSvgPan';
@@ -73,7 +74,6 @@ export function MBQC_Graph({
   });
 
   const { translate, setTranslate, onPointerDown, onPointerMove, onPointerUp } = useSvgPan(svgRef);
-
 
   // Sync translate
   useEffect(() => {
@@ -156,6 +156,8 @@ export function MBQC_Graph({
         onPointerUp={onPointerUp}
         onPointerLeave={onPointerUp}
       />
+
+      <RecenterHint nodes={mainNodes} offset={translate} width={1920} height={1080} />
 
       {/* Context Menu */}
       <ContextMenu

@@ -7,6 +7,7 @@ import { setupAllFilters } from '../../Graph/rendering/renderFilters';
 import { renderEdges } from '../../Graph/rendering/renderEdges';
 import { renderNodeShapes } from '../../Graph/rendering/renderNodes';
 import { renderOutputTables } from '../../Graph/rendering/renderOutputTables';
+import { getBoundingCenter } from '../../Graph/utils/functions';
 
 // Simulator-specific rendering
 import { renderBasisLabelsWithOutcomes, renderPhaseLabelsSimulator, renderIdLabels } from '../rendering/renderLabels';
@@ -29,6 +30,7 @@ type UseSimulatorRenderingProps = {
   measureOperation?: (id: number) => void;
   outputAdjustments?: Record<number, OutputAdjustment>;
   flowLayerLines?: LayerLine[] | null;
+  centerGraphTrigger?: number;
 };
 
 export const useSimulatorRendering = ({
@@ -48,13 +50,16 @@ export const useSimulatorRendering = ({
   measureOperation,
   outputAdjustments,
   flowLayerLines,
+  centerGraphTrigger,
 }: UseSimulatorRenderingProps) => {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const nodeGroupRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null);
+  const rootGroupRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null);
 
   const panOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const [panOffset, setPanOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const scaleRef = useRef<number>(1);
+  const [scale, setScale] = useState<number>(1);
 
 
   useEffect(() => {
@@ -111,6 +116,7 @@ export const useSimulatorRendering = ({
 
     // Root group that everything is rendered into — translated on pan
     const rootGroup = svg.append("g").attr("class", "pan-root");
+    rootGroupRef.current = rootGroup;
 
     rootGroup.attr(
       "transform",
@@ -197,6 +203,7 @@ export const useSimulatorRendering = ({
         `translate(${panOffsetRef.current.x},${panOffsetRef.current.y}) scale(${newScale})`
       );
       setPanOffset({ ...panOffsetRef.current });
+      setScale(newScale);
     });
 
     const link = renderEdges(rootGroup, simEdges);
@@ -256,5 +263,25 @@ export const useSimulatorRendering = ({
 
   }, [mainNodes, edges, inputs, outputs, measured, outcomes, readyToMeasure, width, height, flowLayerLines]);
 
-  return { svgRef };
+  // Recenter pan (keeping current zoom) so the nodes' bounding box is centered in the viewport
+  useEffect(() => {
+    if (!centerGraphTrigger) return;
+    if (!rootGroupRef.current || mainNodes.length === 0) return;
+
+    const center = getBoundingCenter(mainNodes);
+    const currentScale = scaleRef.current;
+    const next = {
+      x: width / 2 - center.x * currentScale,
+      y: height / 2 - center.y * currentScale,
+    };
+
+    panOffsetRef.current = next;
+    rootGroupRef.current.attr(
+      "transform",
+      `translate(${next.x},${next.y}) scale(${currentScale})`
+    );
+    setPanOffset(next);
+  }, [centerGraphTrigger]);
+
+  return { svgRef, panOffset, scale };
 };

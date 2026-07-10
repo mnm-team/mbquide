@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { SimulatorGraphProps, NodeType } from './types';
 import { useSimulatorRendering } from './hooks/useSimulatorRendering';
+import { RecenterHint } from '../Graph/ui/RecenterHint';
 
 export default function MBQC_Simulator({
   nodes: mainNodes,
@@ -17,10 +18,11 @@ export default function MBQC_Simulator({
   width,
   height,
   flowLayerLines,
+  centerGraphTrigger,
 }: SimulatorGraphProps) {
   const [selectedNodes, setSelectedNodes] = useState<NodeType[]>([]);
 
-  const { svgRef } = useSimulatorRendering({
+  const { svgRef, panOffset, scale } = useSimulatorRendering({
     mainNodes,
     edges,
     inputs,
@@ -37,10 +39,11 @@ export default function MBQC_Simulator({
     measureOperation,
     outputAdjustments,
     flowLayerLines,
+    centerGraphTrigger,
   });
 
   return (
-    <div className='w-full h-full'>
+    <div className='relative w-full h-full'>
       <svg
         ref={svgRef}
         viewBox={`0 0 ${width} ${height}`}
@@ -48,6 +51,8 @@ export default function MBQC_Simulator({
         height={height}
         preserveAspectRatio="xMidYMid meet"
       />
+
+      <RecenterHint nodes={mainNodes} offset={panOffset} scale={scale} width={width} height={height} />
     </div>
   );
 }

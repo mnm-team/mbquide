@@ -164,6 +164,12 @@ export default function MBQC_App() {
         e.preventDefault();
         setBuildingMode(prev => !prev);
       }
+
+      // Recenter graph
+      if (e.key === 'c' || e.key === 'C') {
+        e.preventDefault();
+        setCenterGraphTrigger(prev => prev + 1);
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);

@@ -48,6 +48,7 @@ const SimulatorApp: React.FC = () => {
   const [random, setRandom] = useState<boolean>(true);
 
   const [activeNodes, setActiveNodes] = useState<number[]>([]);
+  const [centerGraphTrigger, setCenterGraphTrigger] = useState(0);
 
   // HISTORY STACKS
   const [initData, setInitData] = useState<SimData | null>(null);
@@ -189,6 +190,25 @@ const SimulatorApp: React.FC = () => {
     fetchData();
   }, []);
 
+  // Recenter graph on 'c'
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+      if (e.key === 'c' || e.key === 'C') {
+        e.preventDefault();
+        setCenterGraphTrigger(prev => prev + 1);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
   const postSim = async (body: unknown) => {
     const res = await fetch("http://localhost:18080/api/sim", {
       method: "POST",
@@ -275,6 +295,7 @@ const SimulatorApp: React.FC = () => {
               width={window.innerWidth - 400}
               height={window.innerHeight - 65}
               flowLayerLines={flowLayerLines}
+              centerGraphTrigger={centerGraphTrigger}
             />
             <div className="absolute bottom-6 left-1/2 z-10 w-full -translate-x-1/2 pointer-events-none">
               <div className="pointer-events-auto flex justify-center">
