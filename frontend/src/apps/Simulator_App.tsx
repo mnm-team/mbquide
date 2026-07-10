@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate, useLocation } from "react-router-dom";
 import Statevector from '../components/Simulator/Statevector';
 import StateInput from '../components/Simulator/StateInput';
 import LoadingOverlay from '../components/LoadingOverlay';
 import MBQC_Simulator from '../components/Simulator/index';
 import { ControlPanel } from '../components/ControlPanel';
-import { getDepthOrderedNodes } from './MBQC/utils/positioning'
+import { getDepthOrderedNodes, LayerLine } from './MBQC/utils/positioning'
 
 import { NodeType, Edge, GraphApiResponse, FlowResult } from './MBQC/types';
 import { Checkbox } from '../components/Buttons';
@@ -25,11 +25,17 @@ interface SimData {
 
 const SimulatorApp: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Seeded once from the editor's layout when navigating here; after the
+  // first render, `nodes` itself is the up-to-date source of positions.
+  const editorNodesRef = useRef<NodeType[]>((location.state as { editorNodes?: NodeType[] } | null)?.editorNodes ?? []);
 
   const [selectedNodes, setSelectedNodes] = useState<NodeType[]>([]);
   const [data, setData] = useState<SimData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [nodes, setNodes] = useState<NodeType[]>([]);
+  const [flowLayerLines, setFlowLayerLines] = useState<LayerLine[] | null>(null);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [inputs, setInputs] = useState<number[]>([]);
   const [outputs, setOutputs] = useState<number[]>([]);
@@ -136,8 +142,15 @@ const SimulatorApp: React.FC = () => {
     setOutputs(graphData.outputs || []);
     
     const flow = newData.flow;
-    const { nodes: orderedNodes } = getDepthOrderedNodes(filteredNodes, filteredEdges, flow.depths, flow.corrf, flow.oddNcorrf);
+    // Prefer the simulator's own last layout (so measuring/undo doesn't
+    // reshuffle positions); fall back to the layout carried over from the
+    // editor on the very first render.
+    const existingLayout = nodes.length > 0 ? nodes : editorNodesRef.current;
+    const { nodes: orderedNodes, layerLines } = getDepthOrderedNodes(
+      filteredNodes, filteredEdges, flow.depths, flow.corrf, flow.oddNcorrf, existingLayout
+    );
     setNodes(orderedNodes);
+    setFlowLayerLines(layerLines);
 
   }
 
@@ -261,6 +274,7 @@ const SimulatorApp: React.FC = () => {
               measureOperation={measure}
               width={window.innerWidth - 400}
               height={window.innerHeight - 65}
+              flowLayerLines={flowLayerLines}
             />
             <div className="absolute bottom-6 left-1/2 z-10 w-full -translate-x-1/2 pointer-events-none">
               <div className="pointer-events-auto flex justify-center">

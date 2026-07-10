@@ -222,8 +222,9 @@ export default function MBQC_App() {
 
   const handleSimulate = useCallback(async () => {
     await runGraphOperation(createSimulateOperation());
-    navigate('/SIM');
-  }, [runGraphOperation, navigate]);
+    // Carry the editor's current layout over to the simulator's initial render.
+    navigate('/SIM', { state: { editorNodes: nodes } });
+  }, [runGraphOperation, navigate, nodes]);
 
   const handleGetFlow = useCallback(async () => {
     try {

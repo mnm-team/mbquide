@@ -1,4 +1,4 @@
-import type { NodeType, Edge, SimEdge, OutputAdjustment } from '../Graph/types';
+import type { NodeType, Edge, SimEdge, OutputAdjustment, LayerLine } from '../Graph/types';
 
 export type SimulatorGraphProps = {
   nodes: NodeType[];
@@ -14,6 +14,7 @@ export type SimulatorGraphProps = {
   readyToMeasure: number[];
   width: number;
   height: number;
+  flowLayerLines?: LayerLine[] | null;
 };
 
-export type { NodeType, Edge, SimEdge, OutputAdjustment };
+export type { NodeType, Edge, SimEdge, OutputAdjustment, LayerLine };

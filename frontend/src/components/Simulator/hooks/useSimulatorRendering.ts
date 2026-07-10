@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
-import { NodeType, Edge, SimEdge, OutputAdjustment } from '../types';
+import { NodeType, Edge, SimEdge, OutputAdjustment, LayerLine } from '../types';
 
 // Reuse rendering from MBQC_Graph
 import { setupAllFilters } from '../../Graph/rendering/renderFilters';
@@ -28,6 +28,7 @@ type UseSimulatorRenderingProps = {
   onSelectionChange?: (selected: NodeType[]) => void;
   measureOperation?: (id: number) => void;
   outputAdjustments?: Record<number, OutputAdjustment>;
+  flowLayerLines?: LayerLine[] | null;
 };
 
 export const useSimulatorRendering = ({
@@ -46,6 +47,7 @@ export const useSimulatorRendering = ({
   onSelectionChange,
   measureOperation,
   outputAdjustments,
+  flowLayerLines,
 }: UseSimulatorRenderingProps) => {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const nodeGroupRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null);
@@ -114,6 +116,25 @@ export const useSimulatorRendering = ({
       "transform",
       `translate(${panOffsetRef.current.x},${panOffsetRef.current.y}) scale(${scaleRef.current})`
     );
+
+    // Flow layer separator lines (dashed), drawn behind edges and nodes.
+    if (flowLayerLines && flowLayerLines.length > 0) {
+      rootGroup
+        .append('g')
+        .attr('class', 'flow-layer-lines')
+        .style('pointer-events', 'none')
+        .selectAll('line')
+        .data(flowLayerLines)
+        .join('line')
+        .attr('x1', d => d.x)
+        .attr('x2', d => d.x)
+        .attr('y1', d => d.y1)
+        .attr('y2', d => d.y2)
+        .attr('stroke', '#888')
+        .attr('stroke-width', 1.5)
+        .attr('stroke-dasharray', '8,6')
+        .attr('opacity', 0.5);
+    }
 
     let isDragging = false;
     let dragStart = { x: 0, y: 0 };
@@ -233,7 +254,7 @@ export const useSimulatorRendering = ({
       svg.style("cursor", null);
     };
 
-  }, [mainNodes, edges, inputs, outputs, measured, outcomes, readyToMeasure, width, height]);
+  }, [mainNodes, edges, inputs, outputs, measured, outcomes, readyToMeasure, width, height, flowLayerLines]);
 
   return { svgRef };
 };

@@ -15,7 +15,8 @@ export default function MBQC_Simulator({
   outcomes,
   readyToMeasure,
   width,
-  height
+  height,
+  flowLayerLines,
 }: SimulatorGraphProps) {
   const [selectedNodes, setSelectedNodes] = useState<NodeType[]>([]);
 
@@ -35,6 +36,7 @@ export default function MBQC_Simulator({
     onSelectionChange,
     measureOperation,
     outputAdjustments,
+    flowLayerLines,
   });
 
   return (

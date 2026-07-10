@@ -175,11 +175,13 @@ export const getDepthOrderedNodes = (
   depths: number[],
   corrf: Record<number, number[]>,
   oddNcorrf: Record<number, number[]>,
+  existingNodes: NodeType[] = [],
   ): { nodes: NodeType[]; layerLines: LayerLine[] } => {
 
   const depthPositions = computeDepthBasedPositions(nodes, edges, depths)
   const maxDepth = Math.max(...depths);
 
+  const existingById = new Map(existingNodes.map(node => [node.id, node]));
 
     // --- Position assignment (same as before) ---
   const maxHeight = Math.max(...depthPositions.map(arr => arr.length));
@@ -201,10 +203,20 @@ export const getDepthOrderedNodes = (
       const correctionSet: number[] = corrf[id] ?? [];
       const oddCorrectionSet: number[] = oddNcorrf[id] ?? [];
 
-      const jitterX = (Math.random() - 0.5) * 2 * LAYOUT_CONFIG.LAYER_JITTER_X;
-      const jitterY = (Math.random() - 0.5) * 2 * LAYOUT_CONFIG.LAYER_JITTER_Y;
-      const x = xPos + jitterX;
-      const y = depthIndex * LAYOUT_CONFIG.V_GAP + layerStartY + jitterY;
+      // Keep a node where it was if it's still assigned to the same layer,
+      // so a user's manual arrangement survives re-layout (e.g. simulation steps).
+      const existing = existingById.get(id);
+      let x: number;
+      let y: number;
+      if (existing?.flowDepth === depth && existing.x !== undefined && existing.y !== undefined) {
+        x = existing.x;
+        y = existing.y;
+      } else {
+        const jitterX = (Math.random() - 0.5) * 2 * LAYOUT_CONFIG.LAYER_JITTER_X;
+        const jitterY = (Math.random() - 0.5) * 2 * LAYOUT_CONFIG.LAYER_JITTER_Y;
+        x = xPos + jitterX;
+        y = depthIndex * LAYOUT_CONFIG.V_GAP + layerStartY + jitterY;
+      }
 
       orderedNodes.push({
         id,
