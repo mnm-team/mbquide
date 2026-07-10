@@ -8,6 +8,7 @@ export type NodeType = {
   y?: number;
   fx?: number | null;
   fy?: number | null;
+  flowDepth?: number;
 };
 
 export type Edge = {

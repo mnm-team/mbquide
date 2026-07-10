@@ -1,6 +1,6 @@
 import { useEffect, useRef, RefObject } from 'react';
 import * as d3 from 'd3';
-import { NodeType, Edge, SimEdge, ContextMenuState, OutputAdjustment } from '../types';
+import { NodeType, Edge, SimEdge, ContextMenuState, OutputAdjustment, LayerLine } from '../types';
 import { OUTPUT_TABLE, SVG_DIMENSIONS } from '../utils/constants';
 import { BRUSH_COLORS, getFillColor, getFillColorZX, getLabelColor, getLabelColorZX } from '../utils/colors';
 import { setupAllFilters } from '../rendering/renderFilters';
@@ -27,6 +27,7 @@ type UseGraphSimulationProps = {
   contextMenu?: ContextMenuState;
   onSelectionChange?: (selected: NodeType[]) => void;
   onNodeDrop?: (node?: NodeType, x?: number, y?: number, isInput?: boolean) => void;
+  onNodeDragEnd?: (nodes: NodeType[]) => void;
   onNodeDelete?: (nodes?: NodeType[]) => void;
   onCreateNewEdge?: (edge?: Edge) => void;
   buildingMode?: boolean;
@@ -34,6 +35,7 @@ type UseGraphSimulationProps = {
   ignoreExamples?: boolean;
   classicZXcolors?: boolean;
   outputAdjustments?: Record<number, OutputAdjustment>;
+  flowLayerLines?: LayerLine[] | null;
 };
 
 export const useGraphSimulation = ({
@@ -48,6 +50,7 @@ export const useGraphSimulation = ({
   contextMenu,
   onSelectionChange,
   onNodeDrop,
+  onNodeDragEnd,
   onNodeDelete,
   onCreateNewEdge,
   buildingMode,
@@ -55,6 +58,7 @@ export const useGraphSimulation = ({
   ignoreExamples,
   classicZXcolors,
   outputAdjustments,
+  flowLayerLines,
 }: UseGraphSimulationProps) => {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const nodeGroupRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null);
@@ -155,6 +159,25 @@ export const useGraphSimulation = ({
     const defs = panGroup.append('defs');
     setupAllFilters(defs);
 
+    // Flow layer separator lines (dashed), drawn behind edges and nodes.
+    if (flowLayerLines && flowLayerLines.length > 0) {
+      panGroup
+        .append('g')
+        .attr('class', 'flow-layer-lines')
+        .style('pointer-events', 'none')
+        .selectAll('line')
+        .data(flowLayerLines)
+        .join('line')
+        .attr('x1', d => d.x)
+        .attr('x2', d => d.x)
+        .attr('y1', d => d.y1)
+        .attr('y2', d => d.y2)
+        .attr('stroke', '#888')
+        .attr('stroke-width', 1.5)
+        .attr('stroke-dasharray', '8,6')
+        .attr('opacity', 0.5);
+    }
+
     // Simulation data
     const simEdges = edges.map(e => ({ ...e, source: e.source, target: e.target })) as unknown as SimEdge[];
 
@@ -175,7 +198,7 @@ export const useGraphSimulation = ({
       .data(mainNodes)
       .join("g")
       .attr("class", "node")
-      .call(createNodeDragBehavior(simulation, selectedNodesRef, setSelectedNodes, onSelectionChange) as any);
+      .call(createNodeDragBehavior(simulation, selectedNodesRef, setSelectedNodes, onSelectionChange, onNodeDragEnd) as any);
 
     applyNodeInteractions(
       node,
@@ -255,7 +278,7 @@ export const useGraphSimulation = ({
       window.removeEventListener("keyup", handleKeyUp);
     };
 
-  }, [mainNodes, edges, inputs, outputs, onNodeDrop, contextMenu?.visible, buildingMode]);
+  }, [mainNodes, edges, inputs, outputs, onNodeDrop, contextMenu?.visible, buildingMode, flowLayerLines]);
 
   return { svgRef, nodeGroupRef, panGroupRef, setPanOffset};
 };

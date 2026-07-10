@@ -136,7 +136,8 @@ const SimulatorApp: React.FC = () => {
     setOutputs(graphData.outputs || []);
     
     const flow = newData.flow;
-    setNodes(getDepthOrderedNodes(filteredNodes, filteredEdges, flow.depths, flow.corrf, flow.oddNcorrf));
+    const { nodes: orderedNodes } = getDepthOrderedNodes(filteredNodes, filteredEdges, flow.depths, flow.corrf, flow.oddNcorrf);
+    setNodes(orderedNodes);
 
   }
 

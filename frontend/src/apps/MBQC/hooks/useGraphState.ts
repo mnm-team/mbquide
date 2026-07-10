@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { NodeType, Edge, OutputAdjustment, GraphState } from '../types';
+import { LayerLine } from '../utils/positioning';
 
 export const useGraphState = () => {
   const [selectedNodes, setSelectedNodes] = useState<NodeType[]>([]);
@@ -11,6 +12,7 @@ export const useGraphState = () => {
   const [loading, setLoading] = useState(true);
   const [flowFocusable, setFlowFocusable] = useState(false);
   const [simulatable, setSimulatable] = useState(false);
+  const [flowLayerLines, setFlowLayerLines] = useState<LayerLine[] | null>(null);
 
   const getCurrentState = useCallback((): GraphState => ({
     nodes: [...nodes],
@@ -39,7 +41,8 @@ export const useGraphState = () => {
     loading,
     flowFocusable,
     simulatable,
-    
+    flowLayerLines,
+
     // Setters
     setSelectedNodes,
     setNodes,
@@ -50,7 +53,8 @@ export const useGraphState = () => {
     setLoading,
     setFlowFocusable,
     setSimulatable,
-    
+    setFlowLayerLines,
+
     // Helpers
     getCurrentState,
     updateState,

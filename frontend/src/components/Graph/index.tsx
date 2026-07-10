@@ -19,11 +19,13 @@ export function MBQC_Graph({
   runRelabeling,
   runRelabelingPlanar,
   onNodeDrop,
+  onNodeDragEnd,
   onNodeDelete,
   onCreateNewEdge,
   onPhaseSubmit,
   buildingMode = false,
   centerGraphTrigger,
+  flowLayerLines,
 }: GraphProps) {
   const selectedNodesRef = useRef<NodeType[]>([]);
   const [selectedNodes, setSelectedNodes] = useState<NodeType[]>([]);
@@ -64,6 +66,8 @@ export function MBQC_Graph({
     buildingMode,
     onNodeDoubleClick: handleNodeDoubleClick,
     outputAdjustments,
+    flowLayerLines,
+    onNodeDragEnd,
   });
 
   const { translate, setTranslate, onPointerDown, onPointerMove, onPointerUp } = useSvgPan(svgRef);

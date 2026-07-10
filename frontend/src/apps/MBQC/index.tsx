@@ -9,7 +9,7 @@ import { useGraphApi } from './hooks/useGraphApi';
 import { useGraphValidation } from './hooks/useGraphValidation';
 import { ControlPanel } from '../../components/ControlPanel';
 import { BuildingModeToggle } from './ui/buildingModeToggle';
-import { getCenterOfNodes } from './utils/positioning';
+import { getCenterOfNodes, hasNodeCrossedLayer } from './utils/positioning';
 import {
   createLocalComplementationOperation,
   createPivotOperation,
@@ -38,6 +38,7 @@ export default function MBQC_App() {
     loading,
     flowFocusable,
     simulatable,
+    flowLayerLines,
     setSelectedNodes,
     setNodes,
     setEdges,
@@ -47,6 +48,7 @@ export default function MBQC_App() {
     setLoading,
     setFlowFocusable,
     setSimulatable,
+    setFlowLayerLines,
     getCurrentState,
     updateState,
   } = useGraphState();
@@ -55,7 +57,8 @@ export default function MBQC_App() {
 
   const saveCurrentStateToHistory = useCallback(() => {
     saveToHistory(getCurrentState());
-  }, [saveToHistory, getCurrentState]);
+    setFlowLayerLines(null);
+  }, [saveToHistory, getCurrentState, setFlowLayerLines]);
 
   const {
     fetchGraph,
@@ -78,6 +81,7 @@ export default function MBQC_App() {
     setFlowFocusable,
     setSimulatable,
     setSelectedNodes,
+    setFlowLayerLines,
     saveToHistory: saveCurrentStateToHistory,
   });
 
@@ -94,6 +98,7 @@ export default function MBQC_App() {
     const previousState = undoHistory(getCurrentState());
     if (previousState) {
       updateState(previousState);
+      setFlowLayerLines(null);
       writeGraph(
         previousState.nodes,
         previousState.edges,
@@ -102,12 +107,13 @@ export default function MBQC_App() {
         previousState.adjustments
       );
     }
-  }, [undoHistory, getCurrentState, updateState, writeGraph]);
+  }, [undoHistory, getCurrentState, updateState, setFlowLayerLines, writeGraph]);
 
   const handleRedo = useCallback(() => {
     const nextState = redoHistory(getCurrentState());
     if (nextState) {
       updateState(nextState);
+      setFlowLayerLines(null);
       writeGraph(
         nextState.nodes,
         nextState.edges,
@@ -116,7 +122,7 @@ export default function MBQC_App() {
         nextState.adjustments
       );
     }
-  }, [redoHistory, getCurrentState, updateState, writeGraph]);
+  }, [redoHistory, getCurrentState, updateState, setFlowLayerLines, writeGraph]);
 
   // Effect: Fetch graph
   useEffect(() => {
@@ -278,6 +284,15 @@ export default function MBQC_App() {
       console.error('Error focusing flow:', error);
     }
   }, [orderNodesByFlow, setFlowFocusable]);
+
+  // Dragging a node across a flow-layer boundary invalidates the flow
+  const handleNodeDragEnd = useCallback((draggedNodes: NodeType[]) => {
+    if (!flowLayerLines) return;
+    if (hasNodeCrossedLayer(draggedNodes, flowLayerLines)) {
+      setFlowLayerLines(null);
+      setSimulatable(false);
+    }
+  }, [flowLayerLines, setFlowLayerLines, setSimulatable]);
 
   const handleNodeDrop = useCallback(async (
     droppedNode?: NodeType,
@@ -485,11 +500,13 @@ export default function MBQC_App() {
           runRelabeling={handleRelabeling}
           runRelabelingPlanar={handleRelabelingPlanar}
           onNodeDrop={handleNodeDrop}
+          onNodeDragEnd={handleNodeDragEnd}
           onNodeDelete={handleNodeDelete}
           onCreateNewEdge={handleEdgeCreation}
           onPhaseSubmit={handlePhaseSet}
           buildingMode={buildingMode}
           centerGraphTrigger={centerGraphTrigger}
+          flowLayerLines={flowLayerLines}
         />
 
         {/* OVERLAY CONTROL PANEL */}

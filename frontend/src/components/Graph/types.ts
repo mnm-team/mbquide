@@ -9,6 +9,7 @@ export type NodeType = {
   y?: number;
   fx?: number | null;
   fy?: number | null;
+  flowDepth?: number;
 };
 
 export type Edge = {
@@ -21,6 +22,12 @@ export type SimEdge = {
   source: NodeType;
   target: NodeType;
   colorCode: number;
+};
+
+export type LayerLine = {
+  x: number;
+  y1: number;
+  y2: number;
 };
 
 export type OutputAdjustment = {
@@ -36,6 +43,7 @@ export type GraphProps = {
   outputAdjustments?: Record<string, OutputAdjustment>;
   onSelectionChange?: (selected: NodeType[]) => void;
   onNodeDrop?: (node?: NodeType, x?: number, y?: number, isInput?: boolean) => void;
+  onNodeDragEnd?: (nodes: NodeType[]) => void;
   onNodeDelete?: (nodes?: NodeType[]) => void;
   onCreateNewEdge?: (edge?: Edge) => void;
   runLocalComplementation?: () => void;
@@ -44,6 +52,7 @@ export type GraphProps = {
   onPhaseSubmit?: (node?: NodeType, angle?: number) => void;
   buildingMode?: boolean
   centerGraphTrigger?: number;
+  flowLayerLines?: LayerLine[] | null;
 };
 
 export type ContextMenuState = {

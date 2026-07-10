@@ -7,7 +7,15 @@ export const LAYOUT_CONFIG = {
   START_OFFSET_Y: 100,
   FLOW_CENTER_X: 900,
   FLOW_CENTER_Y: 600,
+  LAYER_JITTER_X: 30, // random x offset within a layer, so edges don't overlap perfectly
+  LAYER_JITTER_Y: 20, // random y offset within a layer
 } as const;
+
+export type LayerLine = {
+  x: number;
+  y1: number;
+  y2: number;
+};
 
 
 export const getNodePosition = (
@@ -167,8 +175,8 @@ export const getDepthOrderedNodes = (
   depths: number[],
   corrf: Record<number, number[]>,
   oddNcorrf: Record<number, number[]>,
-  ): NodeType[] => {
-    
+  ): { nodes: NodeType[]; layerLines: LayerLine[] } => {
+
   const depthPositions = computeDepthBasedPositions(nodes, edges, depths)
   const maxDepth = Math.max(...depths);
 
@@ -192,23 +200,54 @@ export const getDepthOrderedNodes = (
       }
       const correctionSet: number[] = corrf[id] ?? [];
       const oddCorrectionSet: number[] = oddNcorrf[id] ?? [];
+
+      const jitterX = (Math.random() - 0.5) * 2 * LAYOUT_CONFIG.LAYER_JITTER_X;
+      const jitterY = (Math.random() - 0.5) * 2 * LAYOUT_CONFIG.LAYER_JITTER_Y;
+      const x = xPos + jitterX;
+      const y = depthIndex * LAYOUT_CONFIG.V_GAP + layerStartY + jitterY;
+
       orderedNodes.push({
         id,
         basis: originalNode.basis,
         phase: originalNode.phase,
-        x: xPos,
-        y: depthIndex * LAYOUT_CONFIG.V_GAP + layerStartY,
-        fx: xPos,
-        fy: depthIndex * LAYOUT_CONFIG.V_GAP + layerStartY,
+        x,
+        y,
+        fx: x,
+        fy: y,
         correctionSet,
         oddCorrectionSet,
+        flowDepth: depth,
       });
     });
   });
 
-  return orderedNodes;
+  // Separator lines drawn between flow layers
+  const allY = orderedNodes.map(n => n.y!);
+  const y1 = Math.min(...allY) - LAYOUT_CONFIG.V_GAP;
+  const y2 = Math.max(...allY) + LAYOUT_CONFIG.V_GAP;
+
+  const layerLines: LayerLine[] = [];
+  for (let depth = 0; depth < maxDepth; depth++) {
+    const x = startX - (depth + 0.5) * LAYOUT_CONFIG.H_GAP;
+    layerLines.push({ x, y1, y2 });
+  }
+
+  return { nodes: orderedNodes, layerLines };
 
 };
+
+// x decreases with depth, so a node's current band is the number of
+// separator lines lying to its right (higher x).
+export const getLayerBandIndex = (x: number, layerLines: LayerLine[]): number =>
+  layerLines.filter(line => line.x > x).length;
+
+// True if any of the given nodes has drifted into a different layer band
+// than the one it was assigned to when the flow was laid out.
+export const hasNodeCrossedLayer = (nodes: NodeType[], layerLines: LayerLine[]): boolean =>
+  nodes.some(node =>
+    node.flowDepth !== undefined &&
+    getLayerBandIndex(node.fx ?? node.x ?? 0, layerLines) !== node.flowDepth
+  );
 
 
 export const getCenterOfNodes = (nodes: NodeType[]): { x: number; y: number } => {
