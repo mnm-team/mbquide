@@ -77,8 +77,11 @@ export const useGraphSimulation = ({
     const id = requestAnimationFrame(() => {
       if (!nodeGroupRef.current) return;
 
-      const correctionSetIds: number[] = selectedNodes.flatMap(n => n.correctionSet || []);
-      const oddCorrectionSetIds: number[] = selectedNodes.flatMap(n => n.oddCorrectionSet || []);
+      // once flowLayerLines are cleared (e.g. a drag crosses a layer), 
+      // correctionSet/oddCorrectionSet data left on node objects must stop being shown.
+      const flowValid = !!(flowLayerLines && flowLayerLines.length > 0);
+      const correctionSetIds: number[] = flowValid ? selectedNodes.flatMap(n => n.correctionSet || []) : [];
+      const oddCorrectionSetIds: number[] = flowValid ? selectedNodes.flatMap(n => n.oddCorrectionSet || []) : [];
 
       nodeGroupRef.current
         .selectAll<SVGCircleElement | SVGRectElement, NodeType>("circle.node-shape, rect.node-shape")
@@ -94,7 +97,7 @@ export const useGraphSimulation = ({
     });
 
     return () => cancelAnimationFrame(id);
-  }, [selectedNodes]);
+  }, [selectedNodes, flowLayerLines]);
 
   // Full D3 render
   useEffect(() => {
