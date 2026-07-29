@@ -156,14 +156,20 @@ Performs one measurement step on the specified node.
 Runs the full simulation to completion.
 
 
-## Run Test File:
+## Run Tests
 
-Get a Python virtual environment called python_venv and install pyzx 0.9:
+From the project root, set up a Python virtual environment called python_venv and install pyzx 0.10.0:
 ```
-python -m venv python_venv && python_venv/bin/python -m pip install pyzx==0.9.0
+python -m venv python_venv && python_venv/bin/python -m pip install pyzx==0.10.0
 ```
 
-Run:
+Build and run the tests:
 ```
-g++ src/utils.cpp src/graph/* src/QASM/* test/test* -Iinclude -o runTest && ./runTest
+cmake -S backend -B backend/build && cmake --build backend/build/
+backend/build/test/Tests
+```
+
+**Run Benchmarks:**
+```
+backend/build/test/Benchmarks
 ```
