@@ -381,6 +381,7 @@ public:
                 activateEdge(r, n);
             }
         }
+        reorderQubitsCanonically();
     }
 
     // Activates all necessary nodes based on the readyToMEasure
@@ -392,6 +393,7 @@ public:
                 activateEdge(r, n);
             }
         }
+        reorderQubitsCanonically();
     }
 
     void initStatevector(std::string inputStateString = "") {
@@ -507,10 +509,11 @@ public:
         oa.reset();
     }
 
-    // Reorders the statevector qubits so that the output node with the
-    // lowest graph node ID sits at bit 0 (rightmost in the bitstring).
-    // Call this once simulation is complete.
-    void reorderOutputQubits() {
+    // Reorders the statevector qubits so that the node with the lowest
+    // graph node ID sits at bit 0 (rightmost in the bitstring) and the
+    // highest node ID sits at the most significant bit (leftmost).
+    // Called after every activation so this canonical order holds at all times.
+    void reorderQubitsCanonically() {
         int n = (int)qubitToGraphNode.size();
 
         // Build a sorted list of (nodeId, currentQubitIndex)
@@ -565,7 +568,6 @@ public:
                 return;
             }
         }
-        reorderOutputQubits();
     }
 
     std::string runAndGetOutput() {
