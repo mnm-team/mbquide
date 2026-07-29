@@ -38,21 +38,24 @@ export const transformNodesForUpdate = (
     ? [...deleted_indices].sort((a, b) => a - b)
     : [];
 
+  const existingById = new Map(existingNodes.map(node => [node.id, node]));
+
   return (data.meas as [string, string][]).map(([basis, phase], index) => {
     // If deleted_index is defined and this index is >= it, shift by +1
     const oldIndex = sortedDeleted.reduce(
       (originalIndex, deletedIdx) => (originalIndex >= deletedIdx ? originalIndex + 1 : originalIndex),
       index
     );
+    const existingNode = existingById.get(oldIndex);
 
     return {
       id: index,
       basis,
       phase: phase || undefined,
-      x: existingNodes[oldIndex]?.x ?? pos?.[0] ?? (index * 150) + 285000 / (data.size * 150),
-      y: existingNodes[oldIndex]?.y ?? pos?.[1] ?? 500,
-      fx: existingNodes[oldIndex]?.fx ?? pos?.[0] ?? (index * 150) + 285000 / (data.size * 150),
-      fy: existingNodes[oldIndex]?.fy ?? pos?.[1] ?? 500,
+      x: existingNode?.x ?? pos?.[0] ?? (index * 150) + 285000 / (data.size * 150),
+      y: existingNode?.y ?? pos?.[1] ?? 500,
+      fx: existingNode?.fx ?? pos?.[0] ?? (index * 150) + 285000 / (data.size * 150),
+      fy: existingNode?.fy ?? pos?.[1] ?? 500,
     };
   });
 };
