@@ -6,6 +6,7 @@ import { NodeType, Edge, SimEdge, OutputAdjustment, LayerLine } from '../types';
 import { setupAllFilters } from '../../Graph/rendering/renderFilters';
 import { renderEdges } from '../../Graph/rendering/renderEdges';
 import { renderNodeShapes } from '../../Graph/rendering/renderNodes';
+import { renderMembershipHalos } from '../../Graph/rendering/renderHalos';
 import { renderOutputTables } from '../../Graph/rendering/renderOutputTables';
 import { getBoundingCenter } from '../../Graph/utils/functions';
 
@@ -74,22 +75,16 @@ export const useSimulatorRendering = ({
       );
 
       nodeGroupRef.current
-        .selectAll<SVGCircleElement | SVGRectElement, NodeType>("circle, rect")
-        .attr("filter", (d) => {
-          const isSelected = selectedNodes.some(node => node.id === d.id);
-          const isInCorrection = correctionSetIds.includes(d.id);
-          const isInOddCorrection = oddCorrectionSetIds.includes(d.id);
+        .selectAll<SVGCircleElement | SVGRectElement, NodeType>("circle.node-shape, rect.node-shape")
+        .attr("filter", (d) => (selectedNodes.some(node => node.id === d.id) ? "url(#selectedGlow)" : null));
 
-          return isSelected && isInCorrection
-            ? "url(#selectedCorrectionGlow)"
-            : isSelected
-            ? "url(#selectedGlow)"
-            : isInCorrection
-            ? "url(#correctionGlow)"
-            : isInOddCorrection
-            ? "url(#oddCorrectionGlow)"
-            : null;
-        });
+      nodeGroupRef.current
+        .selectAll<SVGCircleElement, NodeType>("circle.halo-correction")
+        .style("display", (d) => (correctionSetIds.includes(d.id) ? null : "none"));
+
+      nodeGroupRef.current
+        .selectAll<SVGCircleElement, NodeType>("circle.halo-odd-correction")
+        .style("display", (d) => (oddCorrectionSetIds.includes(d.id) ? null : "none"));
     });
 
     return () => cancelAnimationFrame(id);
@@ -234,6 +229,7 @@ export const useSimulatorRendering = ({
 
 
     renderNodeShapes(node, inputs, outputs, (d: NodeType) => getFillColorForSimulator(d, measured, active));
+    renderMembershipHalos(node, inputs, outputs);
 
     const labelsT = renderBasisLabelsWithOutcomes(rootGroup, nodes, outcomes);
     const labelsPhase = renderPhaseLabelsSimulator(rootGroup, nodes, measured);

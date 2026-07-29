@@ -6,6 +6,7 @@ import { BRUSH_COLORS, getFillColor, getFillColorZX, getLabelColor, getLabelColo
 import { setupAllFilters } from '../rendering/renderFilters';
 import { renderEdges } from '../rendering/renderEdges';
 import { renderNodeShapes } from '../rendering/renderNodes';
+import { renderMembershipHalos } from '../rendering/renderHalos';
 import { renderBasisLabels, renderPhaseLabels } from '../rendering/renderLabels';
 import { renderOutputTables } from '../rendering/renderOutputTables';
 import { createExampleNodes, renderExampleNodeShapes, renderExampleLabels } from '../rendering/renderExamples';
@@ -71,7 +72,7 @@ export const useGraphSimulation = ({
     panOffsetRef.current = offset;
   };
 
-  // Update glow filters on selected nodes
+  // Update selection glow and correction/odd-correction halo rings
   useEffect(() => {
     const id = requestAnimationFrame(() => {
       if (!nodeGroupRef.current) return;
@@ -80,18 +81,16 @@ export const useGraphSimulation = ({
       const oddCorrectionSetIds: number[] = selectedNodes.flatMap(n => n.oddCorrectionSet || []);
 
       nodeGroupRef.current
-        .selectAll<SVGCircleElement | SVGRectElement, NodeType>("circle, rect")
-        .attr("filter", (d) => {
-          const isSelected = selectedNodes.some(n => n.id === d.id);
-          const isInCorrection = correctionSetIds.includes(d.id);
-          const isInOddCorrection = oddCorrectionSetIds.includes(d.id);
+        .selectAll<SVGCircleElement | SVGRectElement, NodeType>("circle.node-shape, rect.node-shape")
+        .attr("filter", (d) => (selectedNodes.some(n => n.id === d.id) ? "url(#selectedGlow)" : null));
 
-          if (isSelected && isInCorrection) return "url(#selectedCorrectionGlow)";
-          if (isSelected)                   return "url(#selectedGlow)";
-          if (isInCorrection)               return "url(#correctionGlow)";
-          if (isInOddCorrection)            return "url(#oddCorrectionGlow)";
-          return null;
-        });
+      nodeGroupRef.current
+        .selectAll<SVGCircleElement, NodeType>("circle.halo-correction")
+        .style("display", (d) => (correctionSetIds.includes(d.id) ? null : "none"));
+
+      nodeGroupRef.current
+        .selectAll<SVGCircleElement, NodeType>("circle.halo-odd-correction")
+        .style("display", (d) => (oddCorrectionSetIds.includes(d.id) ? null : "none"));
     });
 
     return () => cancelAnimationFrame(id);
@@ -213,6 +212,7 @@ export const useGraphSimulation = ({
     );
 
     renderNodeShapes(node, inputs, outputs, classicZXcolors ? getFillColorZX : getFillColor);
+    renderMembershipHalos(node, inputs, outputs);
 
     // Labels & output tables
     const labelsT = renderBasisLabels(panGroup, mainNodes, classicZXcolors ? getLabelColorZX : getLabelColor);
