@@ -611,6 +611,10 @@ public:
     void reorderQubitsCanonically() {
         int n = (int)qubitToGraphNode.size();
 
+        // Reordering costs O(2^n); skip it once the vector has grown past
+        // the size we'd bother returning/displaying anyway.
+        if ((1 << n) > maxVecSizeJSON) return;
+
         // Build a sorted list of (nodeId, currentQubitIndex)
         std::vector<std::pair<int,int>> nodeToQubit(n);
         for (int q = 0; q < n; ++q)
