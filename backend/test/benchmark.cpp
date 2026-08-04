@@ -53,7 +53,8 @@ StageTiming benchmarkPipeline(
     GraphStats& stats,
     bool simplify = false,
     int repetitions = 1,
-    bool conveyorBelt = true)
+    bool conveyorBelt = true,
+    std::string backend = "statevector")
 {
     StageTiming acc;
 
@@ -100,7 +101,7 @@ StageTiming benchmarkPipeline(
         // ----- Stage 5: Simulation -----
         auto t6 = Clock::now();
         if (flow.ok) {
-            Simulator sim(graph, flow, true, inputState, 128, conveyorBelt);
+            Simulator sim(graph, flow, true, inputState, 128, conveyorBelt, backend);
             sim.simulateAll();
         }
         auto t7 = Clock::now();
@@ -140,13 +141,13 @@ TEST_CASE("Benchmark: Random Clifford - Conveyor Belt Comparison") {
     };
 
     std::vector<int> qubitSizes = {5};
-    int max_depth = 150;
+    int max_depth = 5;
     int depth_step = 5;
 
     for (int nq : qubitSizes) {
 
         std::cout << "\n============================================================\n";
-        std::cout << " Random Clifford comparison — " << nq << " qubits\n";
+        std::cout << " Conveyor Belt comparison — " << nq << " qubits\n";
         std::cout << "============================================================\n\n";
 
         std::cout << std::left  << std::setw(18) << "Depth"
@@ -224,6 +225,68 @@ TEST_CASE("Benchmark: Random Clifford - Conveyor Belt Comparison") {
                       << std::setw(10) << redConv
                       << "\n";
         }
+    }
+
+    CHECK(true);
+}
+
+
+// =============================================
+// BENCHMARK: Statevector vs TensorNetwork backend
+// =============================================
+
+TEST_CASE("Benchmark: Statevector vs TensorNetwork backend") {
+
+    const int REPS = 5;
+
+    auto makeZeroInput = [](int n) -> std::string {
+        return "(1)|" + std::string(n, '0') + ">";
+    };
+
+    std::vector<int> qubitSizes = {4, 6, 8, 10, 12, 14};
+    int depth = 15;
+
+    std::cout << "\n============================================================\n";
+    std::cout << " Statevector vs TensorNetwork backend — depth " << depth << "\n";
+    std::cout << "============================================================\n\n";
+
+    std::cout << std::left  << std::setw(10) << "Qubits"
+              << std::right
+              << std::setw(16) << "Statevector us"
+              << std::setw(16) << "TensorNet us"
+              << std::setw(12) << "Speedup"
+              << "\n";
+    std::cout << std::string(54, '-') << "\n";
+
+    for (int nq : qubitSizes) {
+
+        std::string input = makeZeroInput(nq);
+
+        double simUs = 0.0, tnUs = 0.0;
+
+        for (int rep = 0; rep < REPS; ++rep) {
+            std::string qasm = randomClifford(nq, depth, std::nullopt, std::nullopt, std::nullopt, 0.2);
+
+            GraphStats gsSv, gsTn;
+            StageTiming tSv = benchmarkPipeline(qasm, input, gsSv, true, 1, true, "statevector");
+            StageTiming tTn = benchmarkPipeline(qasm, input, gsTn, true, 1, true, "tensornetwork");
+
+            simUs += tSv.simulate_us;
+            tnUs  += tTn.simulate_us;
+        }
+
+        simUs /= REPS;
+        tnUs  /= REPS;
+
+        double speedup = (tnUs > 0.0) ? (simUs / tnUs) : 0.0;
+
+        std::cout << std::left  << std::setw(10) << nq
+                  << std::right << std::fixed << std::setprecision(1)
+                  << std::setw(16) << simUs
+                  << std::setw(16) << tnUs
+                  << std::setprecision(2)
+                  << std::setw(11) << speedup << "x"
+                  << "\n";
     }
 
     CHECK(true);

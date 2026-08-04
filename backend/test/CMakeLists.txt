@@ -6,6 +6,7 @@ add_executable(Tests
     test_MBQC.cpp
     test_outAdj.cpp
     test_Statevector.cpp
+    test_Tensornetwork.cpp
     test_Simulator.cpp
     test_Flow.cpp
 )

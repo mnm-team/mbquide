@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <set>
+#include <variant>
 #include <algorithm>
 #include <iostream>
 #include <nlohmann/json.hpp>
@@ -13,6 +14,91 @@ using json = nlohmann::json;
 #include "Flow.hpp"
 #include "utils.hpp"
 #include "Statevector.hpp"
+#include "Tensornetwork.hpp"
+
+
+enum class SimulatorBackendType {
+    Statevector,
+    TensorNetwork
+};
+
+// Accepts "statevector"/"sv" and "TensorNetwork"/"tn" (case-insensitive).
+inline SimulatorBackendType parseSimulatorBackendType(const std::string& backend) {
+    std::string b = backend;
+    std::transform(b.begin(), b.end(), b.begin(), ::tolower);
+    if (b == "statevector" || b == "sv") return SimulatorBackendType::Statevector;
+    if (b == "tensornetwork" || b == "tn") return SimulatorBackendType::TensorNetwork;
+    throw std::invalid_argument("Simulator: unknown backend '" + backend + "' (expected statevector/sv or tensornetwork/tn)");
+}
+
+// Wraps whichever concrete backend is active behind a single set of calls,
+// so the rest of Simulator doesn't need to know which one it's talking to.
+class SimulatorBackendHandle {
+public:
+    SimulatorBackendHandle() = default;
+
+    void init(SimulatorBackendType type, int n, bool random) {
+        backendType = type;
+        switch (type) {
+            case SimulatorBackendType::Statevector:
+                impl = StatevectorSimulator(n, random);
+                break;
+            case SimulatorBackendType::TensorNetwork:
+                impl = TensorNetworkSimulator(n, random);
+                break;
+        }
+    }
+
+    SimulatorBackendType getBackendType() const { return backendType; }
+
+    int get_num_qubits() const {
+        return std::visit([](auto& s) { return s.get_num_qubits(); }, impl);
+    }
+
+    int add_qubit_plus() {
+        return std::visit([](auto& s) { return s.add_qubit_plus(); }, impl);
+    }
+
+    void CZ(int u, int v) {
+        std::visit([&](auto& s) { s.CZ(u, v); }, impl);
+    }
+
+    void H(int q) { std::visit([&](auto& s) { s.H(q); }, impl); }
+    void Z(int q) { std::visit([&](auto& s) { s.Z(q); }, impl); }
+    void S(int q) { std::visit([&](auto& s) { s.S(q); }, impl); }
+
+    void reorderQubits(const std::vector<int>& permutation) {
+        std::visit([&](auto& s) { s.reorderQubits(permutation); }, impl);
+    }
+
+    int measure_qubit_in_basis(int q, MeasurementBasis basis, double angle) {
+        return std::visit([&](auto& s) { return s.measure_qubit_in_basis(q, basis, angle); }, impl);
+    }
+
+    void setState(const StatevectorSimulator::VectorC& state) {
+        std::visit([&](auto& s) { s.setState(state); }, impl);
+    }
+
+    std::string getStatevectorBraKet() const {
+        return std::visit([](auto& s) { return s.getStatevectorBraKet(); }, impl);
+    }
+
+    json toJson() const {
+        return std::visit([](auto& s) { return s.toJson(); }, impl);
+    }
+
+    StatevectorSimulator getStatevectorSimulator() const {
+        return std::get<StatevectorSimulator>(impl);
+    }
+
+    TensorNetworkSimulator getTensorNetworkSimulator() const {
+        return std::get<TensorNetworkSimulator>(impl);
+    }
+
+private:
+    SimulatorBackendType backendType = SimulatorBackendType::Statevector;
+    std::variant<StatevectorSimulator, TensorNetworkSimulator> impl;
+};
 
 
 class Simulator {
@@ -26,7 +112,8 @@ private:
     int maxVecSizeJSON;
     bool conveyorBelt;
     std::string inputStateString;
-    StatevectorSimulator statevectorSimulator;
+    SimulatorBackendType backendType;
+    SimulatorBackendHandle backendSim;
 
     std::unordered_map<int, int> measurementOutcomes;
     std::unordered_map<int, std::set<std::string>> appliedCorrections;
@@ -223,8 +310,8 @@ private:
     
 public:
     Simulator() = default;
-    Simulator(const MBQC_Graph& g, const PauliFlowResult& flow, bool random = true, std::string inputState = "", int maxVecSizeJSON = 128, bool conveyorBelt = true)
-        : graph(g.clone()), flow(flow), randomMeasurements(random), inputStateString(inputState), maxVecSizeJSON(maxVecSizeJSON), conveyorBelt(conveyorBelt)
+    Simulator(const MBQC_Graph& g, const PauliFlowResult& flow, bool random = true, std::string inputState = "", int maxVecSizeJSON = 128, bool conveyorBelt = true, std::string backend = "tensornetwork")
+        : graph(g.clone()), flow(flow), randomMeasurements(random), inputStateString(inputState), maxVecSizeJSON(maxVecSizeJSON), conveyorBelt(conveyorBelt), backendType(parseSimulatorBackendType(backend))
     {
         if (!flow.ok) {
             std::cerr << "Cannot create simulator from bad pauli flow!\n";
@@ -264,11 +351,19 @@ public:
     }
 
     std::string getStatevectorBraKet() const {
-        return statevectorSimulator.getStatevectorBraKet();
+        return backendSim.getStatevectorBraKet();
     }
 
     StatevectorSimulator getStatevectorSimulator() const {
-        return statevectorSimulator;
+        return backendSim.getStatevectorSimulator();
+    }
+
+    TensorNetworkSimulator getTensorNetworkSimulator() const {
+        return backendSim.getTensorNetworkSimulator();
+    }
+
+    SimulatorBackendType getBackendType() const {
+        return backendType;
     }
 
     json toJson() const {
@@ -281,10 +376,10 @@ public:
         j["readyToMeasure"] = readyToMeasure;
         j["measured"] = measured;
         j["outcomes"] = measurementOutcomes;
-        if (1 << statevectorSimulator.get_num_qubits() > maxVecSizeJSON) {
+        if (1 << backendSim.get_num_qubits() > maxVecSizeJSON) {
             j["statevector"] = {};
         } else {
-            j["statevector"] = statevectorSimulator.toJson();
+            j["statevector"] = backendSim.toJson();
         }
         j["activeEdges"] = activeEdges;
         
@@ -352,7 +447,7 @@ public:
     void activateNode(int nodeId) {
         if (isActive(nodeId)) return;
         if (wasDeactivated(nodeId)) return;
-        int q = statevectorSimulator.add_qubit_plus();
+        int q = backendSim.add_qubit_plus();
         if (q != qubitToGraphNode.size()) std::cerr << "Activated new node but ID is not correct!\n";
         qubitToGraphNode.insert(qubitToGraphNode.begin(), nodeId);
         activeNodes.insert(nodeId);
@@ -368,7 +463,7 @@ public:
             std::cerr << "Simulator: Edge cannot be activated as node " << v << " is not Activated.\n";
             return;
         }
-        statevectorSimulator.CZ(graphNodeToQubit(u), graphNodeToQubit(v));
+        backendSim.CZ(graphNodeToQubit(u), graphNodeToQubit(v));
         activeEdges.insert({u,v});
     }
 
@@ -397,11 +492,11 @@ public:
     }
 
     void initStatevector(std::string inputStateString = "") {
-        statevectorSimulator = StatevectorSimulator(numInputNodes, randomMeasurements);
+        backendSim.init(backendType, numInputNodes, randomMeasurements);
 
         if (!inputStateString.empty()) {
             auto inputState = StatevectorSimulator::parseBraKet(inputStateString);
-            statevectorSimulator.setState(inputState);
+            backendSim.setState(inputState);
         }
 
         std::vector<int> inputs = graph.getInputs();
@@ -438,7 +533,7 @@ public:
         }
 
         auto [basis, angle] = graph.getMeasurement(nodeId);
-        int outcome = statevectorSimulator.measure_qubit_in_basis(q, basis, angle);
+        int outcome = backendSim.measure_qubit_in_basis(q, basis, angle);
 
         activeNodes.erase(nodeId);
         deactivatedNodes.insert(nodeId);
@@ -497,11 +592,11 @@ public:
             std::string op = gate.name;
             std::transform(op.begin(), op.end(), op.begin(), ::tolower);
             if (op == "h") {
-                statevectorSimulator.H(q);
+                backendSim.H(q);
             } else if (op == "z") {
-                statevectorSimulator.Z(q);
+                backendSim.Z(q);
             } else if (op == "s") {
-                statevectorSimulator.S(q);
+                backendSim.S(q);
             } else {
                 std::cerr << "Unsupported gate from Output Adjustment: " << gate.name << "\n";
             }
@@ -530,7 +625,7 @@ public:
         for (int new_q = 0; new_q < n; ++new_q)
             permutation[new_q] = nodeToQubit[new_q].second;
 
-        statevectorSimulator.reorderQubits(permutation);
+        backendSim.reorderQubits(permutation);
 
         // Update qubitToGraphNode to reflect the new ordering
         for (int new_q = 0; new_q < n; ++new_q)
