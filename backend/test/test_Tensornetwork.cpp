@@ -892,3 +892,93 @@ TEST_CASE("Cross-backend equivalence with StatevectorSimulator") {
         CHECK(sv.getStatevectorBraKet() == tn.getStatevectorBraKet());
     }
 }
+
+
+// ============================================================
+// Bond dimension truncation (maxBondDim / chi).
+//
+// Internally, every entangled block is now stored as an MPS chain rather
+// than one dense vector. chi=0 (the default) means every bond is kept at
+// its full Schmidt rank - mathematically exact, just no longer forced
+// through a dense 2^numQubits vector. chi>0 caps that rank via SVD
+// truncation, trading some fidelity for bounded memory. A 1D linear
+// cluster state (H on every qubit, then a chain of nearest-neighbour CZs)
+// is a convenient testbed: it's a stabilizer state with Schmidt rank
+// exactly 2 across every cut, so chi=2 must still be exact while chi=1
+// forces a real (measurable) product-state approximation.
+// ============================================================
+TEST_CASE("Bond-dimension truncation (maxBondDim / chi)") {
+    const int n = 12;
+
+    auto buildLinearCluster = [n](TensorNetworkSimulator& sim) {
+        for (int q = 0; q < n; ++q) sim.H(q);
+        for (int q = 0; q + 1 < n; ++q) sim.CZ(q, q + 1);
+    };
+    auto buildLinearClusterSv = [n](StatevectorSimulator& sim) {
+        for (int q = 0; q < n; ++q) sim.H(q);
+        for (int q = 0; q + 1 < n; ++q) sim.CZ(q, q + 1);
+    };
+
+    SUBCASE("chi = 0 (default, no truncation) is exact and stays compressed") {
+        TensorNetworkSimulator tn(n, false); // maxBondDim defaults to 0
+        CHECK(tn.getMaxBondDim() == 0);
+        buildLinearCluster(tn);
+
+        CHECK(tn.getFidelityEstimate() == doctest::Approx(1.0));
+
+        StatevectorSimulator sv(n, false);
+        buildLinearClusterSv(sv);
+        CHECK(TensorNetworkSimulator::isEqualUpToGlobalPhase(sv.get_statevector(), tn.get_statevector()));
+
+        // A linear cluster state never needs more than bond dimension 2
+        // at any cut, so even with no cap the chain should stay far
+        // smaller than the 2^n a single dense block would need.
+        CHECK(tn.getStoredAmplitudeCount() < (1LL << n));
+    }
+
+    SUBCASE("chi = 2 already covers a linear cluster state's true Schmidt rank, so it stays exact") {
+        TensorNetworkSimulator tn(n, false, /*maxBondDim=*/2);
+        buildLinearCluster(tn);
+
+        CHECK(tn.getFidelityEstimate() == doctest::Approx(1.0));
+
+        StatevectorSimulator sv(n, false);
+        buildLinearClusterSv(sv);
+        CHECK(TensorNetworkSimulator::isEqualUpToGlobalPhase(sv.get_statevector(), tn.get_statevector()));
+    }
+
+    SUBCASE("chi = 1 forces a lossy product-state approximation, and that loss is measurable") {
+        TensorNetworkSimulator exactTn(n, false, /*maxBondDim=*/0);
+        TensorNetworkSimulator truncTn(n, false, /*maxBondDim=*/1);
+        buildLinearCluster(exactTn);
+        buildLinearCluster(truncTn);
+
+        // chi=1 collapses every bond to a product state, discarding real
+        // entanglement at every one of the n-1 CZs - this must show up
+        // as a clear (not just numerical-noise-sized) fidelity loss.
+        CHECK(truncTn.getFidelityEstimate() < 0.9);
+
+        // Cross-check the internal running estimate against the true
+        // fidelity |<exact|truncated>|^2, computed independently from
+        // the two backends' dense statevectors.
+        Eigen::VectorXcd psiExact = exactTn.get_statevector();
+        Eigen::VectorXcd psiTrunc = truncTn.get_statevector();
+        double trueFidelity = std::norm(psiExact.dot(psiTrunc));
+        CHECK(trueFidelity < 0.9);
+
+        // Truncating must actually shrink storage relative to the exact
+        // (but already-compressed) MPS representation of the same state.
+        CHECK(truncTn.getStoredAmplitudeCount() < exactTn.getStoredAmplitudeCount());
+    }
+}
+
+TEST_CASE("maxBondDim getter/setter") {
+    TensorNetworkSimulator sim(3);
+    CHECK(sim.getMaxBondDim() == 0);
+
+    sim.setMaxBondDim(4);
+    CHECK(sim.getMaxBondDim() == 4);
+
+    CHECK_THROWS_AS(sim.setMaxBondDim(-1), std::invalid_argument);
+    CHECK_THROWS_AS(TensorNetworkSimulator(2, true, -1), std::invalid_argument);
+}

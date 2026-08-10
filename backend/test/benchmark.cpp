@@ -140,7 +140,7 @@ TEST_CASE("Benchmark: Random Clifford - Conveyor Belt Comparison") {
         return "(1)|" + std::string(n, '0') + ">";
     };
 
-    std::vector<int> qubitSizes = {5};
+    std::vector<int> qubitSizes = {5, 10, 15};
     int max_depth = 5;
     int depth_step = 5;
 
@@ -243,8 +243,8 @@ TEST_CASE("Benchmark: Statevector vs TensorNetwork backend") {
         return "(1)|" + std::string(n, '0') + ">";
     };
 
-    std::vector<int> qubitSizes = {4, 6, 8, 10, 12, 14};
-    int depth = 15;
+    std::vector<int> qubitSizes = {4, 6, 8, 10};
+    int depth = 10;
 
     std::cout << "\n============================================================\n";
     std::cout << " Statevector vs TensorNetwork backend — depth " << depth << "\n";

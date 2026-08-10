@@ -33,3 +33,18 @@ PRIVATE
     mbquide_core
     doctest::doctest
 )
+
+
+# -----------------------------
+# Scenarios (Statevector vs TensorNetwork backend, with block visualization)
+# -----------------------------
+add_executable(TensornetInfo
+    test_main.cpp
+    tensornet_info.cpp
+)
+
+target_link_libraries(TensornetInfo
+PRIVATE
+    mbquide_core
+    doctest::doctest
+)
