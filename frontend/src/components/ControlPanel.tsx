@@ -20,9 +20,11 @@ type ControlPanelProps = {
   onUndo?: () => void;
   onRedo?: () => void;
   onSimplifyGraph?: () => void;
+  onOptimizeEdges?: () => void;
   onResetGraph?: () => void;
   onResetSim?: () => void;
   simplifyGraphDisabled?: boolean;
+  optimizeEdgesDisabled?: boolean;
   resetGraphDisabled?: boolean;
   flowFocusable?: boolean;
   simulatable?: boolean;
@@ -73,9 +75,11 @@ export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
     onUndo,
     onRedo,
     onSimplifyGraph,
+    onOptimizeEdges,
     onResetGraph,
     onResetSim,
     simplifyGraphDisabled,
+    optimizeEdgesDisabled,
     resetGraphDisabled,
     onTransformToZX,
     onTransformToMBQC,
@@ -93,7 +97,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
 
   const operationButtons: ControlButton[] = [
     { onClick: onPrintNodes, disabled: selectedCount === 0, label: 'Print', show: !!onPrintNodes },
-    { onClick: onSimplifyGraph, disabled: simplifyGraphDisabled, label: simplificationIcon + ' Simplify', sublabel: 'Automatically simplify the Graph', show: !!onSimplifyGraph },
+    { onClick: onSimplifyGraph, disabled: simplifyGraphDisabled, label: simplificationIcon + ' Reduce Nodes', sublabel: 'Automatically simplify the Graph', show: !!onSimplifyGraph },
+    { onClick: onOptimizeEdges, disabled: optimizeEdgesDisabled, label: simplificationIcon + ' Reduce Edges', sublabel: 'Greedily reduce edges via LC & Pivot', show: !!onOptimizeEdges },
     { onClick: onResetGraph, disabled: resetGraphDisabled, label: resetIcon + ' Clear', sublabel: 'Clear to empty Graph', show: !!onResetGraph },
     { onClick: onResetSim, disabled: !canResetSim, label: resetIcon + ' Reset', sublabel: 'Reset Simulator', show: !!onResetSim },
     { onClick: onLocalComplementation, disabled: !isLCable, label: actionIcon + ' LC', sublabel: 'Local Complementation', show: !!onLocalComplementation },

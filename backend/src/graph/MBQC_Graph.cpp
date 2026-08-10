@@ -1,5 +1,6 @@
 #include "utils.hpp"
 #include "MBQC_Graph.hpp"
+#include <limits>
 
 
 MBQC_Graph::MBQC_Graph(int numNodes, const std::vector<int>& inputVertices, const std::vector<int>& outputVertices) : size(numNodes), inputs(inputVertices), outputs(outputVertices) {
@@ -833,6 +834,451 @@ bool MBQC_Graph::mergeAllYZNodes() {
     }
  
     return anyMerged;
+}
+
+
+// Number of edges among neighborSubset (an induced-subgraph edge count), used by both
+// lcompCost and pivotCost's boundary-edge counting.
+static int inducedEdgeCount(const std::vector<std::vector<int>>& adjacencyMatrix, const std::vector<int>& nodes) {
+    int count = 0;
+    for (size_t i = 0; i < nodes.size(); ++i) {
+        for (size_t j = i + 1; j < nodes.size(); ++j) {
+            if (adjacencyMatrix[nodes[i]][nodes[j]]) {
+                ++count;
+            }
+        }
+    }
+    return count;
+}
+
+
+// Number of edges saved by performing a local complementation on v, restricted to
+// neighborSubset (v's ordinary full neighborhood, or a partial "nu-set"). Positive means the
+// operation strictly reduces the total edge count of the graph. Mirrors lcomp_cost() in
+// pattern_optimize.py: neighborSubset != getNeighbors(v) incurs an "unfusion" penalty, since
+// realizing it requires inserting a helper vertex (see lcompRewrite).
+int MBQC_Graph::lcompCost(int v, const std::vector<int>& neighborSubset) const {
+    int n = static_cast<int>(neighborSubset.size());
+    int edgesInSubset = inducedEdgeCount(adjacencyMatrix, neighborSubset);
+    int maxEdges = n * (n - 1) / 2;
+
+    std::vector<int> fullNeighbors = getNeighbors(v);
+    std::set<int> fullSet(fullNeighbors.begin(), fullNeighbors.end());
+    std::set<int> subsetSet(neighborSubset.begin(), neighborSubset.end());
+    bool isFullNeighborhood = (subsetSet == fullSet);
+    int unfusion = isFullNeighborhood ? 0 : -1;
+
+    // If v is measured in the Y basis, local complementation turns it into a Z-basis node
+    // that can then be Z-deleted, additionally removing all n of its incident edges. Only
+    // applies to the ordinary (non-unfused) full-neighborhood complementation.
+    auto [basis_v, angle_v] = getMeasurement(v);
+    int zBonus = (basis_v == MeasurementBasis::Y && isFullNeighborhood && !isOutput(v)) ? n : 0;
+
+    return 2 * edgesInSubset - maxEdges + zBonus + unfusion;
+}
+
+
+// Number of edges saved by performing a pivot on edge (u,v), restricted to candidate neighbor
+// subsets neighborsU/neighborsV of u and v. Mirrors pivot_cost() in pattern_optimize.py.
+int MBQC_Graph::pivotCost(int u, int v, const std::vector<int>& neighborsU, const std::vector<int>& neighborsV) const {
+    std::set<int> setU(neighborsU.begin(), neighborsU.end());
+    std::set<int> setV(neighborsV.begin(), neighborsV.end());
+
+    std::set<int> A, B, C;
+    for (int x : setU) if (!setV.count(x) && x != v) A.insert(x);
+    for (int x : setV) if (!setU.count(x) && x != u) B.insert(x);
+    for (int x : setU) if (setV.count(x)) C.insert(x);
+
+    int maxEdges = static_cast<int>(A.size()) * static_cast<int>(B.size())
+                 + static_cast<int>(A.size()) * static_cast<int>(C.size())
+                 + static_cast<int>(B.size()) * static_cast<int>(C.size());
+
+    std::vector<int> fullU = getNeighbors(u);
+    std::vector<int> fullV = getNeighbors(v);
+    std::set<int> fullSetU(fullU.begin(), fullU.end());
+    std::set<int> fullSetV(fullV.begin(), fullV.end());
+    bool fullNeighborhoodU = (setU == fullSetU);
+    bool fullNeighborhoodV = (setV == fullSetV);
+    int unfusionU = fullNeighborhoodU ? 0 : -1;
+    int unfusionV = fullNeighborhoodV ? 0 : -1;
+
+    auto edgeBoundary = [this](const std::set<int>& s1, const std::set<int>& s2) {
+        int count = 0;
+        for (int a : s1) {
+            for (int b : s2) {
+                if (adjacencyMatrix[a][b]) ++count;
+            }
+        }
+        return count;
+    };
+    int numEdges = edgeBoundary(A, B) + edgeBoundary(A, C) + edgeBoundary(B, C);
+
+    auto [basis_u, angle_u] = getMeasurement(u);
+    auto [basis_v, angle_v] = getMeasurement(v);
+
+    int zBonusU = (basis_u == MeasurementBasis::X && fullNeighborhoodU && !isOutput(u)) ? static_cast<int>(fullV.size()) : 0;
+    int zBonusV = (basis_v == MeasurementBasis::X && fullNeighborhoodV && !isOutput(v)) ? static_cast<int>(fullU.size()) : 0;
+    if (zBonusU > 0 && zBonusV > 0) {
+        zBonusV -= 1;
+    }
+
+    return 2 * numEdges - maxEdges + zBonusU + zBonusV + unfusionU + unfusionV;
+}
+
+
+// Greedily grows a nu-set (partial neighborhood of v) that locally maximizes lcompCost(v, .),
+// starting from the highest-degree vertex of the 2-core of v's neighborhood subgraph and
+// expanding along that subgraph's edges. Mirrors find_best_lcomp_nu_set() in
+// pattern_optimize.py. Returns ({}, 0) if no productive nu-set is found.
+std::pair<std::vector<int>, int> MBQC_Graph::findBestLcompNuSet(int v) const {
+    std::vector<int> neighborsV = getNeighbors(v);
+    std::set<int> H(neighborsV.begin(), neighborsV.end());
+
+    auto degreeInH = [this, &H](int w) {
+        int d = 0;
+        for (int x : H) {
+            if (x != w && adjacencyMatrix[w][x]) ++d;
+        }
+        return d;
+    };
+
+    // Repeatedly strip nodes of degree < 2 within H (the 2-core of the neighborhood subgraph).
+    while (true) {
+        std::vector<int> toRemove;
+        for (int w : H) {
+            if (degreeInH(w) < 2) toRemove.push_back(w);
+        }
+        if (toRemove.empty()) break;
+        for (int w : toRemove) H.erase(w);
+    }
+
+    if (H.empty()) {
+        return {std::vector<int>(), 0};
+    }
+
+    int maxDegreeNode = -1, maxDeg = -1;
+    for (int w : H) {
+        int d = degreeInH(w);
+        if (d > maxDeg) { maxDeg = d; maxDegreeNode = w; }
+    }
+
+    std::set<int> nuSet = {maxDegreeNode};
+    std::set<int> openNeighbors;
+    for (int x : H) {
+        if (x != maxDegreeNode && adjacencyMatrix[maxDegreeNode][x]) openNeighbors.insert(x);
+    }
+
+    int fVal = lcompCost(v, std::vector<int>(nuSet.begin(), nuSet.end()));
+
+    while (nuSet.size() < H.size() && !openNeighbors.empty()) {
+        int bestN = -1, bestScore = std::numeric_limits<int>::min();
+        for (int n : openNeighbors) {
+            std::vector<int> candidate(nuSet.begin(), nuSet.end());
+            candidate.push_back(n);
+            int score = lcompCost(v, candidate);
+            if (score > bestScore) { bestScore = score; bestN = n; }
+        }
+
+        if (bestScore >= fVal) {
+            nuSet.insert(bestN);
+            openNeighbors.erase(bestN);
+            for (int x : H) {
+                if (x != bestN && adjacencyMatrix[bestN][x] && !nuSet.count(x)) {
+                    openNeighbors.insert(x);
+                }
+            }
+            fVal = bestScore;
+        } else {
+            break;
+        }
+    }
+
+    return {std::vector<int>(nuSet.begin(), nuSet.end()), fVal};
+}
+
+
+// Greedily grows nu-sets (partial neighborhoods of u and v) that locally maximize
+// pivotCost(u, v, .), by expanding along the cross-boundary edges among
+// A = N(u)\N(v)\{v}, B = N(v)\N(u)\{u}, C = N(u)\N(v). Mirrors find_best_pivot_nu_sets() in
+// pattern_optimize.py. Returns ({{}, {}}, 0) if no productive nu-sets are found.
+std::pair<std::pair<std::vector<int>, std::vector<int>>, int> MBQC_Graph::findBestPivotNuSets(int u, int v) const {
+    std::vector<int> neighborsU = getNeighbors(u);
+    std::vector<int> neighborsV = getNeighbors(v);
+    std::set<int> setU(neighborsU.begin(), neighborsU.end());
+    std::set<int> setV(neighborsV.begin(), neighborsV.end());
+
+    std::set<int> A, B, C;
+    for (int x : setU) if (!setV.count(x) && x != v) A.insert(x);
+    for (int x : setV) if (!setU.count(x) && x != u) B.insert(x);
+    for (int x : setU) if (setV.count(x)) C.insert(x);
+
+    auto groupOf = [&](int x) {
+        if (A.count(x)) return 0;
+        if (B.count(x)) return 1;
+        return 2; // C
+    };
+
+    std::set<int> allNodes;
+    allNodes.insert(A.begin(), A.end());
+    allNodes.insert(B.begin(), B.end());
+    allNodes.insert(C.begin(), C.end());
+
+    // H keeps only cross-group edges (A-B, A-C, B-C); in-group edges don't affect pivotCost.
+    std::map<int, std::set<int>> Hadj;
+    for (int x : allNodes) Hadj[x] = {};
+    for (int x : allNodes) {
+        for (int y : allNodes) {
+            if (x < y && adjacencyMatrix[x][y] && groupOf(x) != groupOf(y)) {
+                Hadj[x].insert(y);
+                Hadj[y].insert(x);
+            }
+        }
+    }
+
+    std::set<int> Hnodes;
+    for (int x : allNodes) {
+        if (!Hadj[x].empty()) Hnodes.insert(x);
+    }
+
+    if (Hnodes.empty()) {
+        return {{std::vector<int>(), std::vector<int>()}, 0};
+    }
+
+    int maxDegNode = -1, maxDeg = -1;
+    for (int x : Hnodes) {
+        int d = static_cast<int>(Hadj[x].size());
+        if (d > maxDeg) { maxDeg = d; maxDegNode = x; }
+    }
+
+    std::set<int> nuSet = {maxDegNode};
+    std::set<int> openNeighbors = Hadj[maxDegNode];
+
+    auto scoreOf = [&](const std::set<int>& candidateSet) {
+        std::vector<int> nuU, nuV;
+        for (int x : candidateSet) {
+            if (setU.count(x)) nuU.push_back(x);
+            if (setV.count(x)) nuV.push_back(x);
+        }
+        return pivotCost(u, v, nuU, nuV);
+    };
+
+    int fVal = scoreOf(nuSet);
+
+    while (!openNeighbors.empty()) {
+        int bestN = -1, bestScore = std::numeric_limits<int>::min();
+        for (int n : openNeighbors) {
+            std::set<int> candidate = nuSet;
+            candidate.insert(n);
+            int score = scoreOf(candidate);
+            if (score > bestScore) { bestScore = score; bestN = n; }
+        }
+
+        if (bestScore >= fVal) {
+            nuSet.insert(bestN);
+            openNeighbors.erase(bestN);
+            for (int x : Hadj[bestN]) {
+                if (!nuSet.count(x)) openNeighbors.insert(x);
+            }
+            fVal = bestScore;
+        } else {
+            break;
+        }
+    }
+
+    std::vector<int> finalNuU, finalNuV;
+    for (int x : nuSet) {
+        if (setU.count(x)) finalNuU.push_back(x);
+        if (setV.count(x)) finalNuV.push_back(x);
+    }
+
+    return {{finalNuU, finalNuV}, fVal};
+}
+
+
+// Mirrors rule_with_z_deletion() in pattern_optimize.py: whether applying `rule` here would
+// expose a Pauli-basis node that can subsequently be Z-deleted, used to justify applying an
+// otherwise zero-score rewrite (it still shrinks the graph, just not its edge count alone).
+bool MBQC_Graph::ruleFavorsZDeletion(bool isPivot, int u, int v) const {
+    if (isPivot) {
+        auto [basisU, angleU] = getMeasurement(u);
+        auto [basisV, angleV] = getMeasurement(v);
+        return basisU == MeasurementBasis::X || basisV == MeasurementBasis::X;
+    }
+    auto [basisU, angleU] = getMeasurement(u);
+    return basisU == MeasurementBasis::Y;
+}
+
+
+// Local complementation restricted to neighborSubset. Mirrors lcomp_rewrite() in
+// pattern_optimize.py.
+int MBQC_Graph::lcompRewrite(int u, const std::vector<int>& neighborSubset) {
+    std::vector<int> fullNeighbors = getNeighbors(u);
+    std::set<int> fullSet(fullNeighbors.begin(), fullNeighbors.end());
+    std::set<int> subsetSet(neighborSubset.begin(), neighborSubset.end());
+
+    if (fullSet == subsetSet) {
+        localComplementation(u);
+        return u;
+    }
+
+    std::vector<int> insertNeighbors = neighborSubset;
+    insertNeighbors.push_back(u);
+    ZInsertion(insertNeighbors);
+    int helper = size - 1;
+    localComplementation(helper);
+    return helper;
+}
+
+
+// Pivot on (u,v) restricted to candidate neighbor subsets neighborsU/neighborsV, via three
+// lcompRewrite calls (each of which may unfuse its target vertex). Mirrors pivot_rewrite() in
+// pattern_optimize.py. When neighborsU/neighborsV are u's/v's actual full neighborhoods, this
+// reduces to the ordinary three-fold pivot() = LC(u); LC(v); LC(u).
+std::pair<int, int> MBQC_Graph::pivotRewrite(int u, int v, const std::vector<int>& neighborsU, const std::vector<int>& neighborsV) {
+    std::set<int> setU(neighborsU.begin(), neighborsU.end());
+    std::set<int> setV(neighborsV.begin(), neighborsV.end());
+
+    std::set<int> A, B, C;
+    for (int x : setU) if (!setV.count(x) && x != v) A.insert(x);
+    for (int x : setV) if (!setU.count(x) && x != u) B.insert(x);
+    for (int x : setU) if (setV.count(x)) C.insert(x);
+
+    std::vector<int> firstSet(A.begin(), A.end());
+    firstSet.insert(firstSet.end(), C.begin(), C.end());
+    firstSet.push_back(v);
+    int newU = lcompRewrite(u, firstSet);
+
+    std::vector<int> secondSet(A.begin(), A.end());
+    secondSet.insert(secondSet.end(), B.begin(), B.end());
+    secondSet.push_back(newU);
+    int newV = lcompRewrite(v, secondSet);
+
+    std::vector<int> thirdSet(B.begin(), B.end());
+    thirdSet.insert(thirdSet.end(), C.begin(), C.end());
+    thirdSet.push_back(newV);
+    int newU2 = lcompRewrite(newU, thirdSet);
+
+    if (newU != newU2) {
+        auto [basisNewU, angleNewU] = getMeasurement(newU);
+        if (basisNewU == MeasurementBasis::Y) {
+            localComplementation(newU);
+            ZDeletion(newU);
+            // ZDeletion(newU) shifts down every index greater than newU.
+            if (newU2 > newU) --newU2;
+            if (newV > newU) --newV;
+        }
+    }
+
+    return {newU2, newV};
+}
+
+
+// Greedy edge-count reduction that alternates between local complementation and pivot,
+// each considered both on full neighborhoods and on greedily-searched partial "nu-set"
+// neighborhoods (via vertex unfusion). At each step, applies whichever candidate rewrite has
+// the highest score; when favorVertexRemoval is set, a zero-score rewrite is still applied if
+// it exposes a node for ZDeletion. Stops once no candidate is worth applying. Mirrors
+// greedy_optimize_edges() in pattern_optimize.py.
+std::vector<GraphRewriteStep> MBQC_Graph::greedyOptimizeEdges(bool favorVertexRemoval) {
+    struct Candidate {
+        bool isPivot;
+        int u, v;
+        std::vector<int> nuU, nuV;
+        int score;
+    };
+
+    std::vector<GraphRewriteStep> rules;
+
+    while (true) {
+        // Relabel eligible planar nodes to Pauli basis (mirrors simplify()'s first step).
+        // Without this, e.g. a Clifford XY(0) node stays labeled XY forever and lcompCost's/
+        // pivotCost's X/Y-basis z_bonus (and thus most real reduction opportunities on
+        // circuit-derived graphs, which are built entirely out of XY-labeled nodes) never
+        // triggers.
+        for (const auto& [node, data] : measurements) {
+            MeasurementBasis basis = data.first;
+            double angle = normalize_radians(data.second);
+
+            bool isPlanar = (basis == MeasurementBasis::XY ||
+                             basis == MeasurementBasis::XZ ||
+                             basis == MeasurementBasis::YZ);
+            bool isQuarterAngle = fAlmostEqual(fmod(angle, M_PI / 2), 0);
+
+            if (isPlanar && isQuarterAngle && !isOutput(node)) {
+                relabel(node);
+            }
+        }
+
+        std::vector<Candidate> candidates;
+        std::vector<int> nonInputs = getNonInputs();
+
+        std::vector<std::pair<int, int>> edges;
+        for (auto& [a, b] : getAllEdges()) {
+            if (a < b && !isInput(a) && !isInput(b)) {
+                edges.push_back({a, b});
+            }
+        }
+
+        for (int node : nonInputs) {
+            std::vector<int> fullN = getNeighbors(node);
+            candidates.push_back({false, node, -1, fullN, {}, lcompCost(node, fullN)});
+        }
+        for (auto& [a, b] : edges) {
+            std::vector<int> fullA = getNeighbors(a);
+            std::vector<int> fullB = getNeighbors(b);
+            candidates.push_back({true, a, b, fullA, fullB, pivotCost(a, b, fullA, fullB)});
+        }
+        for (int node : nonInputs) {
+            auto [nuSet, score] = findBestLcompNuSet(node);
+            candidates.push_back({false, node, -1, nuSet, {}, score});
+        }
+        for (auto& [a, b] : edges) {
+            auto [nuSets, score] = findBestPivotNuSets(a, b);
+            candidates.push_back({true, a, b, nuSets.first, nuSets.second, score});
+        }
+
+        if (candidates.empty()) break;
+
+        size_t bestIdx = 0;
+        for (size_t i = 1; i < candidates.size(); ++i) {
+            if (candidates[i].score > candidates[bestIdx].score) bestIdx = i;
+        }
+        Candidate best = candidates[bestIdx];
+
+        bool apply = best.score > 0 ||
+                     (best.score == 0 && favorVertexRemoval && ruleFavorsZDeletion(best.isPivot, best.u, best.v));
+        if (!apply) break;
+
+        auto zDeleteIfPauliZ = [this](int node) {
+            auto [basis, angle] = getMeasurement(node);
+            double normAngle = normalize_radians(angle);
+            if (basis == MeasurementBasis::Z && !isOutput(node) &&
+                (fAlmostEqual(normAngle, 0) || fAlmostEqual(normAngle, M_PI))) {
+                ZDeletion(node);
+            }
+        };
+
+        if (best.isPivot) {
+            auto [newU2, newV] = pivotRewrite(best.u, best.v, best.nuU, best.nuV);
+            std::vector<int> toCheck = {newU2, newV};
+            std::sort(toCheck.begin(), toCheck.end(), std::greater<int>());
+            for (int node : toCheck) zDeleteIfPauliZ(node);
+        } else {
+            int newV = lcompRewrite(best.u, best.nuU);
+            zDeleteIfPauliZ(newV);
+        }
+
+        rules.push_back({best.isPivot ? GraphRewriteRuleType::Pivot : GraphRewriteRuleType::LocalComplementation,
+                          best.u, best.v, best.score});
+    }
+
+    return rules;
+}
+
+
+bool MBQC_Graph::canOptimizeEdges(bool favorVertexRemoval) const {
+    MBQC_Graph probe = clone();
+    return !probe.greedyOptimizeEdges(favorVertexRemoval).empty();
 }
 
 

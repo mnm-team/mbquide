@@ -19,6 +19,21 @@
 using json = nlohmann::json;
 
 
+enum class GraphRewriteRuleType {
+    LocalComplementation,
+    Pivot
+};
+
+// One applied step of greedyOptimizeEdges(): which rule was used, on which vertex/vertices
+// (v is unused, i.e. -1, for LocalComplementation), and the edge-count score it achieved.
+struct GraphRewriteStep {
+    GraphRewriteRuleType rule;
+    int u;
+    int v;
+    int score;
+};
+
+
 class MBQC_Graph {
 public:
     // Default constructor to use map<any, MBQC_Graph>
@@ -71,14 +86,54 @@ public:
     // Simplification:
     void simplify(int maxIterations = 1000);
     bool mergeAllYZNodes();
-    
-    // JSON: 
+    std::vector<GraphRewriteStep> greedyOptimizeEdges(bool favorVertexRemoval = true);
+
+    // Whether greedyOptimizeEdges() would apply at least one rewrite if called right now.
+    // Runs the real algorithm on a throwaway clone, so it stays exactly in sync with
+    // greedyOptimizeEdges() instead of duplicating its eligibility logic. Intended for UI
+    // enablement checks where actually mutating the graph isn't wanted.
+    bool canOptimizeEdges(bool favorVertexRemoval = true) const;
+
+    // JSON:
     json toJson() const;
     void exportToPYZXJsonFile(const std::string& filename, int rowLength = 4) const;
     static MBQC_Graph fromJson(const json& j);
     static MBQC_Graph importFromPYZXJsonFile(const std::string& filename);
     
 private:
+    // Cost (in saved edges) of a local complementation on v, restricted to a candidate
+    // neighbor subset (the "nu-set"). neighborSubset == getNeighbors(v) is the ordinary,
+    // full-neighborhood local complementation; any other subset implies vertex "unfusion".
+    int lcompCost(int v, const std::vector<int>& neighborSubset) const;
+
+    // Cost (in saved edges) of a pivot on edge (u,v), restricted to candidate neighbor
+    // subsets of u and v. Mirrors lcompCost's nu-set generalization for pivot.
+    int pivotCost(int u, int v, const std::vector<int>& neighborsU, const std::vector<int>& neighborsV) const;
+
+    // Greedily grows a nu-set (partial neighborhood) for a local complementation on v that
+    // locally maximizes lcompCost. Returns the chosen subset and its score.
+    std::pair<std::vector<int>, int> findBestLcompNuSet(int v) const;
+
+    // Greedily grows nu-sets (partial neighborhoods) for a pivot on (u,v) that locally
+    // maximizes pivotCost. Returns the chosen (subsetU, subsetV) pair and its score.
+    std::pair<std::pair<std::vector<int>, std::vector<int>>, int> findBestPivotNuSets(int u, int v) const;
+
+    // Whether applying `rule` on this vertex/edge would newly expose a Pauli node for
+    // ZDeletion, used as a tie-break to still apply zero-score rewrites.
+    bool ruleFavorsZDeletion(bool isPivot, int u, int v) const;
+
+    // Local complementation restricted to neighborSubset. If neighborSubset is exactly u's
+    // current full neighborhood, this is an ordinary localComplementation(u). Otherwise, u is
+    // "unfused" first: a fresh Z(0) helper vertex is inserted, connected to neighborSubset and
+    // u, and the local complementation is applied to that helper vertex instead. Returns the
+    // vertex the complementation was actually applied to (u, or the new helper vertex).
+    int lcompRewrite(int u, const std::vector<int>& neighborSubset);
+
+    // Pivot on (u,v) restricted to candidate neighbor subsets of u and v (via three
+    // lcompRewrite calls), unfusing u and/or v as needed. Returns the (possibly new) vertex
+    // identities that ended up playing the roles of u and v after the rewrite.
+    std::pair<int, int> pivotRewrite(int u, int v, const std::vector<int>& neighborsU, const std::vector<int>& neighborsV);
+
     int size;
     std::vector<std::vector<int>> adjacencyMatrix;
     std::map<int, std::pair<MeasurementBasis, double>> measurements;

@@ -53,6 +53,10 @@ export const createSimplifyOperation = () => ({
   simplify: true,
 });
 
+export const createOptimizeEdgesOperation = () => ({
+  optimizeEdges: true,
+});
+
 export const createSimulateOperation = (input: string = "") => ({
   simulate: true,
   random: true,

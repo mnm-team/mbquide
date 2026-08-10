@@ -9,6 +9,7 @@ add_executable(Tests
     test_Tensornetwork.cpp
     test_Simulator.cpp
     test_Flow.cpp
+    test_simplifications.cpp
 )
 
 target_link_libraries(Tests

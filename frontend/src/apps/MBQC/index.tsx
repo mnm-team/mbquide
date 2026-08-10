@@ -7,6 +7,7 @@ import { useGraphState } from './hooks/useGraphState';
 import { useGraphHistory } from './hooks/useGraphHistory';
 import { useGraphApi } from './hooks/useGraphApi';
 import { useGraphValidation } from './hooks/useGraphValidation';
+import { useCanOptimizeEdges } from './hooks/useCanOptimizeEdges';
 import { ControlPanel } from '../../components/ControlPanel';
 import { BuildingModeToggle } from './ui/buildingModeToggle';
 import { getCenterOfNodes, hasNodeCrossedLayer } from './utils/positioning';
@@ -21,6 +22,7 @@ import {
   createFocusFlowOperation,
   createSimulateOperation,
   createSimplifyOperation,
+  createOptimizeEdgesOperation,
 } from './api/operations';
 
 export default function MBQC_App() {
@@ -93,6 +95,8 @@ export default function MBQC_App() {
     fitForRelabeling,
     areNonPlanar,
   } = useGraphValidation(nodes, selectedNodes, edges, inputs, outputs);
+
+  const canOptimizeEdges = useCanOptimizeEdges(nodes, edges, inputs, outputs);
 
   const handleUndo = useCallback(() => {
     const previousState = undoHistory(getCurrentState());
@@ -498,6 +502,11 @@ export default function MBQC_App() {
     fetchGraph();
   }, [runGraphOperation, fetchGraph]);
 
+  const handleOptimizeEdges = useCallback(async () => {
+    await runGraphOperation(createOptimizeEdgesOperation());
+    fetchGraph();
+  }, [runGraphOperation, fetchGraph]);
+
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-[#111]">
       <LoadingOverlay isLoading={loading} />
@@ -543,6 +552,7 @@ export default function MBQC_App() {
 
                 {...(!buildingMode && {
                   onSimplifyGraph: handleSimplifyGraph,
+                  onOptimizeEdges: handleOptimizeEdges,
                   onLocalComplementation: handleLocalComplementation,
                   onPivot: handlePivot,
                   onZInsertion: handleZInsertion,
@@ -555,6 +565,7 @@ export default function MBQC_App() {
                   fitForRelabeling: fitForRelabeling(),
                   areNonPlanar: areNonPlanar(),
                   simplifyGraphDisabled: !canSimplify(),
+                  optimizeEdgesDisabled: !canOptimizeEdges,
                   onGetFlow: handleGetFlow,
                   onFocusFlow: handleFocusFlow,
                   onSimulate: handleSimulate,
