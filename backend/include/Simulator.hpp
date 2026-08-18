@@ -270,36 +270,38 @@ private:
         return false;
     }
 
+    // A dependency set is "resolved" for readiness purposes once the only
+    // entry left (if any) is the node's own self-correction: that entry can
+    // never actually be applied, since by the time it would fire the node
+    // has already been measured.
+    static bool depsResolved(int node, const std::unordered_set<int>& deps) {
+        return deps.empty() || (deps.size() == 1 && deps.count(node));
+    }
+
     // Recompute which nodes are ready to be measured.
-    // A non-input, non-done node is ready when:
-    //   (a) all its flow-dependencies have been measured, OR
-    //   (b) all pending corrections on it are irrelevant for its basis, AND
-    //   (c) it is connected to already activated Nodes (only so the amount activated nodes / statevector size doesn't blow up) 
+    // A non-input, non-done node is ready when, for each correction axis
+    // (X and Z) independently, either:
+    //   (a) that axis's pending dependencies are resolved (measured or self-only), OR
+    //   (b) that axis's correction type has no impact on the node's basis,
+    // As a special case, if the X- and Z-dependencies are identical, the
+    // combined correction acts as Y (up to phase), so it's also enough for
+    // that to be irrelevant to the basis even if neither axis alone is resolved.
     void recomputeReadyToMeasure(int u) {
-        
+
         for (int node = 0; node < totalNodes; ++node) {
-            
-            if (isDone(node) || !neighboringActivated(node)) continue;
+
+            if (isDone(node)) continue;
 
             const auto& xDeps = Xdependencies[node];
             const auto& zDeps = Zdependencies[node];
 
-            const bool noDeps = xDeps.empty() && zDeps.empty();
-
-            const bool selfOnlyDeps =
-                ((xDeps.size() == 1 && xDeps.count(node)) || xDeps.empty()) &&
-                ((zDeps.size() == 1 && zDeps.count(node)) || zDeps.empty());
-
-            const bool zCorrIrrel =
-                xDeps.empty() && correctionHasNoImpact(node, 'Z');
-
-            const bool xCorrIrrel =
-                zDeps.empty() && correctionHasNoImpact(node, 'X');
+            const bool xOk = depsResolved(node, xDeps) || correctionHasNoImpact(node, 'X');
+            const bool zOk = depsResolved(node, zDeps) || correctionHasNoImpact(node, 'Z');
 
             const bool yCorrIrrel =
-                Xdependencies == Zdependencies && correctionHasNoImpact(node, 'Y');  // When it is in corrf and Odd(corrf)  
+                xDeps == zDeps && correctionHasNoImpact(node, 'Y');  // XZ ~ Y: irrelevant together even if pending
 
-            if (noDeps || selfOnlyDeps || zCorrIrrel || xCorrIrrel || yCorrIrrel) {
+            if ((xOk && zOk) || yCorrIrrel) {
                 readyToMeasure.insert(node);
             }
         }
