@@ -41,6 +41,7 @@ public:
     void sdg(int q)               { addGate("Sdg", {q}); }
     void t  (int q)               { addGate("T",   {q}); }
     void tdg(int q)               { addGate("Tdg", {q}); }
+    void sx (int q)               { addGate("SX",  {q}); }
     void rx (int q, double theta) { addGate("Rx",  {q}, {}, {theta}); }
     void ry (int q, double theta) { addGate("Ry",  {q}, {}, {theta}); }
     void rz (int q, double theta) { addGate("Rz",  {q}, {}, {theta}); }
@@ -144,6 +145,11 @@ private:
         emitJ(out, q, theta);
     }
 
+    // SX = e^{iπ/4}·Rx(π/2)  →  Rx(π/2), global phase ignored
+    static void dSX(QuantumCircuit& out, int q) {
+        dRx(out, q, kPi2);
+    }
+
     // Ry(θ) = Rz(-π/2)·Rx(θ)·Rz(π/2)
     //       = J(0)·J(-π/2) · J(θ)·J(0) · J(0)·J(π/2)
     //  After cancelling J(0)·J(0)=I at the two boundaries:
@@ -179,18 +185,29 @@ private:
     }
 
 
-    // Toffoli / CCX — standard 6-CNOT decomposition (Nielsen & Chuang Fig 4.9)
+    // Toffoli / CCX — direct J/CZ decomposition
     static void dCCX(QuantumCircuit& out, int c0, int c1, int t) {
-        dH  (out, t);
-        dCNOT(out, c1, t);  dTdg(out, t);
-        dCNOT(out, c0, t);  dT  (out, t);
-        dCNOT(out, c1, t);  dTdg(out, t);
-        dCNOT(out, c0, t);
-        dT(out, c1);        dT  (out, t);
-        dH(out, t);
-        dCNOT(out, c0, c1);
-        dT  (out, c0);      dTdg(out, c1);
-        dCNOT(out, c0, c1);
+        emitCZ(out, c1, t);
+        emitJ (out, t, 0.0);
+        emitJ (out, t, 7.0 * kPi4);
+        emitCZ(out, c0, t);
+        emitJ (out, t, 0.0);
+        emitJ (out, t, kPi4);
+        emitCZ(out, c1, t);
+        emitJ (out, t, 0.0);
+        emitJ (out, t, 7.0 * kPi4);
+        emitCZ(out, c0, t);
+        emitJ (out, t, 0.0);
+        emitJ (out, t, kPi4);
+
+        emitJ (out, c1, kPi4);
+        emitCZ(out, c0, c1);
+        emitJ (out, c1, 0.0);
+        emitJ (out, c0, kPi4);
+        emitJ (out, c0, 0.0);
+        emitJ (out, c1, 7.0 * kPi4);
+        emitCZ(out, c0, c1);
+        emitJ (out, c1, 0.0);
     }
 
     // CCZ(a,b,t) = H(t) · CCX(a,b,t) · H(t)
@@ -214,6 +231,7 @@ private:
         else if (n == "SDG"  || n == "S†")        dSdg(out, g.qubits.at(0));
         else if (n == "T")                        dT  (out, g.qubits.at(0));
         else if (n == "TDG"  || n == "T†")        dTdg(out, g.qubits.at(0));
+        else if (n == "SX"   || n == "V")         dSX (out, g.qubits.at(0));
         else if (n == "RX")   dRx(out, g.qubits.at(0), g.params.at(0));
         else if (n == "RY")   dRy(out, g.qubits.at(0), g.params.at(0));
         else if (n == "RZ")   dRz(out, g.qubits.at(0), g.params.at(0));
