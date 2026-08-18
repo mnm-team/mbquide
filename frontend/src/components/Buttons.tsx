@@ -52,11 +52,15 @@ type ActionButtonProps = {
   disabled?: boolean;
   label: string;
   sublabel?: string;
+  // Renders sublabel as a hover-only tooltip above the button instead of a always-visible
+  // line below the label - for compact toolbars (e.g. ControlPanel) where the sublabel is a
+  // hint rather than part of the button's permanent content.
+  sublabelAsTooltip?: boolean;
   icon?: React.ReactNode;
   arrow?: boolean;
 };
 
-export function ActionButton({ onClick, disabled, label, sublabel, icon, arrow }: ActionButtonProps) {
+export function ActionButton({ onClick, disabled, label, sublabel, sublabelAsTooltip, icon, arrow }: ActionButtonProps) {
   return (
     <button
       onClick={onClick}
@@ -98,8 +102,21 @@ export function ActionButton({ onClick, disabled, label, sublabel, icon, arrow }
           <div className="text-gray-800 group-hover:text-gray-900 text-sm font-medium transition-colors duration-200">
             {label}
           </div>
-          {sublabel && (
+          {sublabel && !sublabelAsTooltip && (
             <div className="text-gray-400 text-xs mt-0.5 transition-colors duration-200 group-hover:text-gray-500">
+              {sublabel}
+            </div>
+          )}
+          {sublabel && sublabelAsTooltip && (
+            <div
+              role="tooltip"
+              className="
+                pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2
+                whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-xs text-white
+                opacity-0 scale-95 transition-all duration-150 ease-out
+                group-hover:opacity-100 group-hover:scale-100
+              "
+            >
               {sublabel}
             </div>
           )}

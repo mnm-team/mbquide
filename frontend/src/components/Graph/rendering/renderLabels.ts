@@ -1,5 +1,6 @@
 import * as d3 from 'd3';
 import { NodeType } from '../types';
+import { prettifyPhase } from '../utils/angles';
 
 export const renderBasisLabels = (
   svg: d3.Selection<SVGGElement, unknown, null, undefined>,
@@ -31,5 +32,5 @@ export const renderPhaseLabels = (
     .attr("font-size", "13px")
     .attr("text-anchor", "middle")
     .attr("dy", "30px")
-    .text((d) => d.phase || "");
+    .text((d) => prettifyPhase(d.phase));
 };

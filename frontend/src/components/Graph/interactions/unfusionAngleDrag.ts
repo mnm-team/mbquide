@@ -14,7 +14,9 @@ export const createUnfusionAngleDrag = (
   panGroup: d3.Selection<SVGGElement, unknown, null, undefined>,
   groups: d3.Selection<SVGGElement, UnfusionPair, SVGGElement, unknown>,
   onCommit?: (xyNode: NodeType, yzNode: NodeType, angle: number, target: UnfusionTarget) => void,
-  labelsPhase?: d3.Selection<d3.BaseType, NodeType, SVGGElement, unknown>
+  labelsPhase?: d3.Selection<d3.BaseType, NodeType, SVGGElement, unknown>,
+  onDragStart?: () => void,
+  onDragEnd?: () => void
 ) => {
   let alphaOriginal = 0;
   let moved = false;
@@ -25,6 +27,11 @@ export const createUnfusionAngleDrag = (
     .drag<SVGLineElement, UnfusionPair>()
     .filter((event) => event.button === 0)
     .on('start', function (_event, d) {
+      // Must snapshot history *before* the 'drag' handler below starts mutating d.xy/d.yz in
+      // place - they're the same node objects the React state array holds, so saving after
+      // the fact would capture the already-mutated (post-drag) phase as the "previous" state.
+      onDragStart?.();
+
       const betaOld = normalizeRadians(parsePhaseString(d.xy.phase));
       const yzOld = normalizeRadians(parsePhaseString(d.yz.phase));
       alphaOriginal = normalizeRadians(betaOld - yzOld);
@@ -68,12 +75,14 @@ export const createUnfusionAngleDrag = (
       // A plain click (no movement) fires a full drag start/end with nothing to commit.
       // Skip it: committing here would re-render the whole graph and tear down the DOM
       // mid double-click, which is exactly what made double-clicking the handle unreliable.
-      if (!moved) return;
-
-      if (onCommit) {
+      if (moved && onCommit) {
         // Dragging always moves the XY node's own angle (beta); the pendant's angle is
         // derived from it (see the drag handler above).
         onCommit(d.xy, d.yz, normalizeRadians(parsePhaseString(d.xy.phase)), 'xy');
       }
+
+      // Runs after onCommit (which consumes the onDragStart snapshot synchronously): a no-op
+      // click never had anything to consume it, so this is what clears it in that case.
+      onDragEnd?.();
     });
 };

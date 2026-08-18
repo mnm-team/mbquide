@@ -26,6 +26,8 @@ export function MBQC_Graph({
   onCreateNewEdge,
   onPhaseSubmit,
   runYZUnfusion,
+  onYZDragStart,
+  onYZDragEnd,
   onYZAngleChange,
   buildingMode = false,
   centerGraphTrigger,
@@ -92,6 +94,8 @@ export function MBQC_Graph({
     flowLayerLines,
     onNodeDragStart,
     onNodeDragEnd,
+    onYZDragStart,
+    onYZDragEnd,
     onYZAngleChange,
     onUnfusionHandleDoubleClick: handleUnfusionHandleDoubleClick,
   });

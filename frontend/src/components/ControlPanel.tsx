@@ -140,6 +140,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
               disabled={b.disabled}
               label={b.label}
               sublabel={b.sublabel}
+              sublabelAsTooltip
               icon={b.icon}
             />
           </div>

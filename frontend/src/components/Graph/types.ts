@@ -56,6 +56,10 @@ export type GraphProps = {
   runRelabeling?: () => void;
   onPhaseSubmit?: (node?: NodeType, angle?: number) => void;
   runYZUnfusion?: (node: NodeType) => void;
+  // Fired at the start/end of an unfusion-handle drag, before the drag mutates node phases in
+  // place - lets the caller snapshot history at the true "before" moment (see MBQC/index.tsx).
+  onYZDragStart?: () => void;
+  onYZDragEnd?: () => void;
   onYZAngleChange?: (xyNode: NodeType, yzNode: NodeType, angle: number, target: UnfusionTarget) => void;
   buildingMode?: boolean
   centerGraphTrigger?: number;

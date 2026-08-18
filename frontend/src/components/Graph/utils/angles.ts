@@ -54,3 +54,27 @@ export const snapToEighthPi = (radians: number): number =>
 
 export const formatEighthPi = (radians: number): string =>
   EIGHTH_PI_LABELS[angleToEighthPiStep(radians)];
+
+// Mirrors the backend's fAlmostEqual() tolerance (backend/include/utils.hpp) so a decimal
+// snaps to a pretty pi label under the same conditions the backend would have used.
+const SNAP_TOLERANCE = 0.0001;
+
+// A node's `phase` field can linger as a plain decimal string in local state (e.g. after
+// undo/redo, or mid-interaction) even when its value is numerically a multiple of pi/8. Call
+// this wherever a phase is displayed so it always renders as the backend would, without
+// waiting for the next backend round-trip to re-prettify it.
+export const prettifyPhase = (phase?: string): string => {
+  if (!phase) return phase ?? '';
+  if (phase === "0") return '';
+  if (phase in PRETTY_ANGLE_TO_RADIANS) return phase;
+
+  const parsed = parseFloat(phase);
+  if (!Number.isFinite(parsed)) return phase;
+
+  const normalized = normalizeRadians(parsed);
+  const step = Math.round(normalized / PI_OVER_8);
+  const snapped = step * PI_OVER_8;
+  return Math.abs(normalized - snapped) < SNAP_TOLERANCE
+    ? EIGHTH_PI_LABELS[step % 16]
+    : phase;
+};

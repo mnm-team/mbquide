@@ -238,6 +238,21 @@ export default function MBQC_App() {
     runGraphOperation(createYZUnfusionOperation(node.id, alpha), { pos });
   }, [runGraphOperation]);
 
+  // The angle-drag handle mutates node phases in place for a smooth live preview (see
+  // unfusionAngleDrag.ts), so by the time a drag commits, xyNode/yzNode already hold the new
+  // angle - saving history at that point would capture the post-drag state as "previous" and
+  // undo would appear to do nothing. Snapshotting at drag-start (before the mutation) fixes
+  // that; mirrors dragStartSnapshotRef's use for plain node drags below.
+  const yzDragSnapshotRef = useRef<HistoryState | null>(null);
+
+  const handleYZDragStart = useCallback(() => {
+    yzDragSnapshotRef.current = getCurrentState();
+  }, [getCurrentState]);
+
+  const handleYZDragEnd = useCallback(() => {
+    yzDragSnapshotRef.current = null;
+  }, []);
+
   // Commits an angle change from the drag handle (always target: 'xy') or its free-text modal
   // (either node). Recomputes the alpha invariant (xyNode.phase - yzNode.phase) from the
   // pre-edit phases rather than trusting the caller to have already applied it, so it stays
@@ -248,7 +263,13 @@ export default function MBQC_App() {
     angle: number,
     target: 'xy' | 'yz' = 'xy',
   ) => {
-    saveCurrentStateToHistory();
+    if (yzDragSnapshotRef.current) {
+      saveToHistory(yzDragSnapshotRef.current);
+      yzDragSnapshotRef.current = null;
+      setFlowLayerLines(null);
+    } else {
+      saveCurrentStateToHistory();
+    }
 
     const alpha = normalizeRadians(parsePhaseString(xyNode.phase) - parsePhaseString(yzNode.phase));
     const newAngle = normalizeRadians(angle);
@@ -267,6 +288,7 @@ export default function MBQC_App() {
   }, [
     nodes, edges, inputs, outputs, adjustments,
     setNodes, writeGraph, fetchGraphPreservePositions, saveCurrentStateToHistory,
+    saveToHistory, setFlowLayerLines,
   ]);
 
   const handleSimulate = useCallback(async () => {
@@ -576,6 +598,8 @@ export default function MBQC_App() {
           onCreateNewEdge={handleEdgeCreation}
           onPhaseSubmit={handlePhaseSet}
           runYZUnfusion={handleYZUnfusion}
+          onYZDragStart={handleYZDragStart}
+          onYZDragEnd={handleYZDragEnd}
           onYZAngleChange={handleYZAngleChange}
           buildingMode={buildingMode}
           centerGraphTrigger={centerGraphTrigger}

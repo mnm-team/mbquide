@@ -46,6 +46,8 @@ type UseGraphSimulationProps = {
   classicZXcolors?: boolean;
   outputAdjustments?: Record<number, OutputAdjustment>;
   flowLayerLines?: LayerLine[] | null;
+  onYZDragStart?: () => void;
+  onYZDragEnd?: () => void;
   onYZAngleChange?: (xyNode: NodeType, yzNode: NodeType, angle: number, target: UnfusionTarget) => void;
   onUnfusionHandleDoubleClick?: (xyNode: NodeType, yzNode: NodeType) => void;
 };
@@ -72,6 +74,8 @@ export const useGraphSimulation = ({
   classicZXcolors,
   outputAdjustments,
   flowLayerLines,
+  onYZDragStart,
+  onYZDragEnd,
   onYZAngleChange,
   onUnfusionHandleDoubleClick,
 }: UseGraphSimulationProps) => {
@@ -253,7 +257,7 @@ export const useGraphSimulation = ({
       const unfusionKnobs = unfusionGroups.select<SVGLineElement>('line.unfusion-knob');
 
       unfusionKnobs.call(
-        createUnfusionAngleDrag(panGroup, unfusionGroups, onYZAngleChange, labelsPhase) as any
+        createUnfusionAngleDrag(panGroup, unfusionGroups, onYZAngleChange, labelsPhase, onYZDragStart, onYZDragEnd) as any
       );
 
       if (onUnfusionHandleDoubleClick) {
