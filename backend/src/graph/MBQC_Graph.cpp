@@ -699,6 +699,37 @@ void MBQC_Graph::mergeYZ(int u, int v) {
 }
 
 
+// Adds a new YZ vertex to a vertex u in the XY plane, connected only to u. The new angle of u
+// becomes β, and the new YZ vertex's angle becomes β-ɑ, where ɑ is u's old angle.
+void MBQC_Graph::YZUnfusion(int u, double beta) {
+    if (u < 0 || u >= size) {
+        std::cerr << "YZUnfusion: node " << u << " is out of range\n";
+        return;
+    }
+
+    auto [basis_u, angle_u] = getMeasurement(u);
+    if (basis_u != MeasurementBasis::XY) {
+        std::cerr << "YZUnfusion: node " << u << " is not in XY basis\n";
+        return;
+    }
+
+    beta = normalize_radians(beta);
+
+    int newNodeIndex = size;
+    size += 1;
+
+    adjacencyMatrix.resize(size);
+    for (auto& row : adjacencyMatrix) {
+        row.resize(size, 0);
+    }
+    adjacencyMatrix[newNodeIndex][u] = 1;
+    adjacencyMatrix[u][newNodeIndex] = 1;
+
+    measurements[u] = {MeasurementBasis::XY, beta};
+    measurements[newNodeIndex] = {MeasurementBasis::YZ, normalize_radians(beta - angle_u)};
+}
+
+
 // ########## AUTOMATIC SIMPLIFICATION ##############
 
 void MBQC_Graph::simplify(int maxIterations) {
@@ -795,22 +826,48 @@ void MBQC_Graph::simplify(int maxIterations) {
 }
 
 
-// Scans all pairs of YZ nodes and merges any eligible pair.
-// Returns true if at least one merge was performed.
+// Scans all pairs of YZ nodes and merges any eligible pair, and absorbs any YZ node whose only
+// neighbor is an XY node back into that neighbor.
+// Returns true if at least one merge/absorption was performed.
 bool MBQC_Graph::mergeAllYZNodes() {
     bool anyMerged = false;
- 
+
     bool merged = true;
     while (merged) {
         merged = false;
- 
+
         // Collect current YZ non-output nodes
         std::vector<int> yzNodes;
         for (const auto& [node, data] : measurements) {
             if (data.first == MeasurementBasis::YZ && !isOutput(node))
                 yzNodes.push_back(node);
         }
- 
+
+        // Absorb YZ pendants: undoes YZUnfusion. A YZ node w with a single XY neighbor u
+        // (angle A) can always be phase-shifted to angle 0 by moving its own angle onto u
+        // (u's new angle = A - w's angle), since shifting both u and w by the same amount
+        // preserves u.angle - w.angle, the invariant that ties the pair to the same
+        // pre-unfusion state. Once w sits at angle 0 it's a no-op for ZDeletion's neighbors,
+        // so ZDeletion(w) just removes it structurally.
+        for (int w : yzNodes) {
+            std::vector<int> neighbors = getNeighbors(w);
+            if (neighbors.size() != 1) continue;
+
+            int u = neighbors[0];
+            auto [basisU, angleU] = getMeasurement(u);
+            if (basisU != MeasurementBasis::XY) continue;
+
+            auto [basisW, angleW] = getMeasurement(w);
+            measurements[u] = {MeasurementBasis::XY, normalize_radians(angleU - angleW)};
+            measurements[w] = {MeasurementBasis::YZ, 0.0};
+
+            ZDeletion(w);
+            merged = true;
+            anyMerged = true;
+            break; // ZDeletion(w) shifted indices; restart with a fresh scan
+        }
+        if (merged) continue;
+
         // Try all pairs
         for (size_t i = 0; i < yzNodes.size() && !merged; ++i) {
             for (size_t j = i + 1; j < yzNodes.size() && !merged; ++j) {
@@ -1189,87 +1246,99 @@ std::vector<GraphRewriteStep> MBQC_Graph::greedyOptimizeEdges(bool favorVertexRe
 
     std::vector<GraphRewriteStep> rules;
 
-    while (true) {
-        // Relabel eligible planar nodes to Pauli basis (mirrors simplify()'s first step).
-        // Without this, e.g. a Clifford XY(0) node stays labeled XY forever and lcompCost's/
-        // pivotCost's X/Y-basis z_bonus (and thus most real reduction opportunities on
-        // circuit-derived graphs, which are built entirely out of XY-labeled nodes) never
-        // triggers.
-        for (const auto& [node, data] : measurements) {
-            MeasurementBasis basis = data.first;
-            double angle = normalize_radians(data.second);
+    // Outer loop: mergeAllYZNodes() (YZ-pendant absorption / pair merging) can change node
+    // angles or remove vertices, which may expose new LC/pivot opportunities that the inner
+    // search already converged past. Keep alternating until neither phase makes progress, so a
+    // single call reaches a true fixed point (a second call finds nothing left to do).
+    bool mergedAnything = true;
+    while (mergedAnything) {
+        while (true) {
+            // Relabel eligible planar nodes to Pauli basis (mirrors simplify()'s first step).
+            // Without this, e.g. a Clifford XY(0) node stays labeled XY forever and lcompCost's/
+            // pivotCost's X/Y-basis z_bonus (and thus most real reduction opportunities on
+            // circuit-derived graphs, which are built entirely out of XY-labeled nodes) never
+            // triggers.
+            for (const auto& [node, data] : measurements) {
+                MeasurementBasis basis = data.first;
+                double angle = normalize_radians(data.second);
 
-            bool isPlanar = (basis == MeasurementBasis::XY ||
-                             basis == MeasurementBasis::XZ ||
-                             basis == MeasurementBasis::YZ);
-            bool isQuarterAngle = fAlmostEqual(fmod(angle, M_PI / 2), 0);
+                bool isPlanar = (basis == MeasurementBasis::XY ||
+                                 basis == MeasurementBasis::XZ ||
+                                 basis == MeasurementBasis::YZ);
+                bool isQuarterAngle = fAlmostEqual(fmod(angle, M_PI / 2), 0);
 
-            if (isPlanar && isQuarterAngle && !isOutput(node)) {
-                relabel(node);
+                if (isPlanar && isQuarterAngle && !isOutput(node)) {
+                    relabel(node);
+                }
             }
-        }
 
-        std::vector<Candidate> candidates;
-        std::vector<int> nonInputs = getNonInputs();
+            std::vector<Candidate> candidates;
+            std::vector<int> nonInputs = getNonInputs();
 
-        std::vector<std::pair<int, int>> edges;
-        for (auto& [a, b] : getAllEdges()) {
-            if (a < b && !isInput(a) && !isInput(b)) {
-                edges.push_back({a, b});
+            std::vector<std::pair<int, int>> edges;
+            for (auto& [a, b] : getAllEdges()) {
+                if (a < b && !isInput(a) && !isInput(b)) {
+                    edges.push_back({a, b});
+                }
             }
-        }
 
-        for (int node : nonInputs) {
-            std::vector<int> fullN = getNeighbors(node);
-            candidates.push_back({false, node, -1, fullN, {}, lcompCost(node, fullN)});
-        }
-        for (auto& [a, b] : edges) {
-            std::vector<int> fullA = getNeighbors(a);
-            std::vector<int> fullB = getNeighbors(b);
-            candidates.push_back({true, a, b, fullA, fullB, pivotCost(a, b, fullA, fullB)});
-        }
-        for (int node : nonInputs) {
-            auto [nuSet, score] = findBestLcompNuSet(node);
-            candidates.push_back({false, node, -1, nuSet, {}, score});
-        }
-        for (auto& [a, b] : edges) {
-            auto [nuSets, score] = findBestPivotNuSets(a, b);
-            candidates.push_back({true, a, b, nuSets.first, nuSets.second, score});
-        }
-
-        if (candidates.empty()) break;
-
-        size_t bestIdx = 0;
-        for (size_t i = 1; i < candidates.size(); ++i) {
-            if (candidates[i].score > candidates[bestIdx].score) bestIdx = i;
-        }
-        Candidate best = candidates[bestIdx];
-
-        bool apply = best.score > 0 ||
-                     (best.score == 0 && favorVertexRemoval && ruleFavorsZDeletion(best.isPivot, best.u, best.v));
-        if (!apply) break;
-
-        auto zDeleteIfPauliZ = [this](int node) {
-            auto [basis, angle] = getMeasurement(node);
-            double normAngle = normalize_radians(angle);
-            if (basis == MeasurementBasis::Z && !isOutput(node) &&
-                (fAlmostEqual(normAngle, 0) || fAlmostEqual(normAngle, M_PI))) {
-                ZDeletion(node);
+            for (int node : nonInputs) {
+                std::vector<int> fullN = getNeighbors(node);
+                candidates.push_back({false, node, -1, fullN, {}, lcompCost(node, fullN)});
             }
-        };
+            for (auto& [a, b] : edges) {
+                std::vector<int> fullA = getNeighbors(a);
+                std::vector<int> fullB = getNeighbors(b);
+                candidates.push_back({true, a, b, fullA, fullB, pivotCost(a, b, fullA, fullB)});
+            }
+            for (int node : nonInputs) {
+                auto [nuSet, score] = findBestLcompNuSet(node);
+                candidates.push_back({false, node, -1, nuSet, {}, score});
+            }
+            for (auto& [a, b] : edges) {
+                auto [nuSets, score] = findBestPivotNuSets(a, b);
+                candidates.push_back({true, a, b, nuSets.first, nuSets.second, score});
+            }
 
-        if (best.isPivot) {
-            auto [newU2, newV] = pivotRewrite(best.u, best.v, best.nuU, best.nuV);
-            std::vector<int> toCheck = {newU2, newV};
-            std::sort(toCheck.begin(), toCheck.end(), std::greater<int>());
-            for (int node : toCheck) zDeleteIfPauliZ(node);
-        } else {
-            int newV = lcompRewrite(best.u, best.nuU);
-            zDeleteIfPauliZ(newV);
+            if (candidates.empty()) break;
+
+            size_t bestIdx = 0;
+            for (size_t i = 1; i < candidates.size(); ++i) {
+                if (candidates[i].score > candidates[bestIdx].score) bestIdx = i;
+            }
+            Candidate best = candidates[bestIdx];
+
+            bool apply = best.score > 0 ||
+                         (best.score == 0 && favorVertexRemoval && ruleFavorsZDeletion(best.isPivot, best.u, best.v));
+            if (!apply) break;
+
+            auto zDeleteIfPauliZ = [this](int node) {
+                auto [basis, angle] = getMeasurement(node);
+                double normAngle = normalize_radians(angle);
+                if (basis == MeasurementBasis::Z && !isOutput(node) &&
+                    (fAlmostEqual(normAngle, 0) || fAlmostEqual(normAngle, M_PI))) {
+                    ZDeletion(node);
+                }
+            };
+
+            if (best.isPivot) {
+                auto [newU2, newV] = pivotRewrite(best.u, best.v, best.nuU, best.nuV);
+                std::vector<int> toCheck = {newU2, newV};
+                std::sort(toCheck.begin(), toCheck.end(), std::greater<int>());
+                for (int node : toCheck) zDeleteIfPauliZ(node);
+            } else {
+                int newV = lcompRewrite(best.u, best.nuU);
+                zDeleteIfPauliZ(newV);
+            }
+
+            rules.push_back({best.isPivot ? GraphRewriteRuleType::Pivot : GraphRewriteRuleType::LocalComplementation,
+                              best.u, best.v, best.score});
         }
 
-        rules.push_back({best.isPivot ? GraphRewriteRuleType::Pivot : GraphRewriteRuleType::LocalComplementation,
-                          best.u, best.v, best.score});
+        // Clean up any YZ-pendant-on-XY structures left behind by the nu-set unfusions above
+        // (lcompRewrite/pivotRewrite), and merge any now-mergeable YZ pairs. If that changed
+        // anything, loop back: it may have exposed new LC/pivot opportunities.
+        mergedAnything = mergeAllYZNodes();
     }
 
     return rules;

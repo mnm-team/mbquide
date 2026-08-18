@@ -224,6 +224,10 @@ int main() {
                     } else {
                         graph.relabelPlanar(u);
                     }
+                } else if (op == "yz-unfusion") {
+                    int u = body["node"];
+                    double beta = body["beta"];
+                    graph.YZUnfusion(u, beta);
                 }
 
                 j = graph.toJson();

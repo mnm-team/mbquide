@@ -745,6 +745,258 @@ TEST_CASE("Test invalid graph operations") {
     graph.setMeasurement(3, MeasurementBasis::Y, M_PI);
 }
 
+TEST_CASE("Test YZUnfusion") {
+
+    SUBCASE("Basic") {
+        MBQC_Graph graph(3, {0}, {2});
+
+        graph.addEdge(0, 1);
+        graph.addEdge(1, 2);
+
+        graph.setMeasurement(0, MeasurementBasis::X);
+        double alpha = M_PI;
+        graph.setMeasurement(1, MeasurementBasis::XY, alpha);
+
+        MBQC_Graph original = graph.clone();
+
+        double beta = M_PI/2;
+        graph.YZUnfusion(1, beta);
+
+        CHECK(graph.getSize() == 4);
+        CHECK(graph.getAdjacencyMatrix().size() == 4);
+
+        auto [basisU, angleU] = graph.getMeasurement(1);
+        CHECK(basisU == MeasurementBasis::XY);
+        CHECK(fAlmostEqual(angleU, beta));
+
+        auto [basisNew, angleNew] = graph.getMeasurement(3);
+        CHECK(basisNew == MeasurementBasis::YZ);
+        CHECK(fAlmostEqual(angleNew, normalize_radians(beta - alpha)));
+
+        // New node's only neighbor is node 1
+        CHECK(graph.getAdjacencyMatrix()[3][1] == 1);
+        CHECK(graph.getAdjacencyMatrix()[3][0] == 0);
+        CHECK(graph.getAdjacencyMatrix()[3][2] == 0);
+
+        CHECK(compareTensors(MBQCtoZXGraph(graph), MBQCtoZXGraph(original)));
+    }
+
+
+    SUBCASE("Fails on non-XY node") {
+        MBQC_Graph graph(3, {0}, {2});
+
+        graph.addEdge(0, 1);
+        graph.addEdge(1, 2);
+
+        graph.setMeasurement(0, MeasurementBasis::X);
+        graph.setMeasurement(1, MeasurementBasis::YZ, 0.3);
+
+        MBQC_Graph original = graph.clone();
+
+        std::cerr << "Ignore this YZUnfusion error - ";
+        graph.YZUnfusion(1, 0.5);
+
+        CHECK(graph.getSize() == original.getSize());
+    }
+
+    SUBCASE("Fails on out-of-range node") {
+        MBQC_Graph graph(3, {0}, {2});
+
+        graph.addEdge(0, 1);
+        graph.addEdge(1, 2);
+
+        graph.setMeasurement(0, MeasurementBasis::X);
+        graph.setMeasurement(1, MeasurementBasis::XY, 0.7);
+
+        MBQC_Graph original = graph.clone();
+
+        std::cerr << "Ignore this YZUnfusion error - ";
+        graph.YZUnfusion(5, 0.5);
+
+        CHECK(graph.getSize() == original.getSize());
+    }
+
+    SUBCASE("beta == alpha collapses YZ angle to zero") {
+        MBQC_Graph graph(3, {0}, {2});
+
+        graph.addEdge(0, 1);
+        graph.addEdge(1, 2);
+
+        graph.setMeasurement(0, MeasurementBasis::X);
+        double alpha = M_PI / 3;
+        graph.setMeasurement(1, MeasurementBasis::XY, alpha);
+
+        MBQC_Graph original = graph.clone();
+
+        graph.YZUnfusion(1, alpha);
+
+        auto [basisNew, angleNew] = graph.getMeasurement(3);
+        CHECK(basisNew == MeasurementBasis::YZ);
+        CHECK(fAlmostEqual(angleNew, 0));
+
+        CHECK(compareTensors(MBQCtoZXGraph(graph), MBQCtoZXGraph(original)));
+    }
+
+    SUBCASE("Multiples of pi/4, various starting angles") {
+        double alphas[] = {0, M_PI / 4, M_PI / 2, 3 * M_PI / 4, M_PI, 5 * M_PI / 4, 3 * M_PI / 2, 7 * M_PI / 4};
+        double betas[]  = {0, M_PI / 4, M_PI / 2, M_PI, 3 * M_PI / 2, 7 * M_PI / 4};
+
+        for (double alpha : alphas) {
+            for (double beta : betas) {
+                CAPTURE(alpha);
+                CAPTURE(beta);
+
+                MBQC_Graph graph(3, {0}, {2});
+                graph.addEdge(0, 1);
+                graph.addEdge(1, 2);
+
+                graph.setMeasurement(0, MeasurementBasis::X);
+                graph.setMeasurement(1, MeasurementBasis::XY, alpha);
+
+                MBQC_Graph original = graph.clone();
+
+                graph.YZUnfusion(1, beta);
+
+                auto [basisU, angleU] = graph.getMeasurement(1);
+                CHECK(basisU == MeasurementBasis::XY);
+                CHECK(fAlmostEqual(angleU, normalize_radians(beta)));
+
+                auto [basisNew, angleNew] = graph.getMeasurement(3);
+                CHECK(basisNew == MeasurementBasis::YZ);
+                CHECK(fAlmostEqual(angleNew, normalize_radians(beta - alpha)));
+
+                CHECK(compareTensors(MBQCtoZXGraph(graph), MBQCtoZXGraph(original)));
+            }
+        }
+    }
+
+    SUBCASE("Negative and out-of-range (> 2pi) angles get normalized") {
+        MBQC_Graph graph(3, {0}, {2});
+
+        graph.addEdge(0, 1);
+        graph.addEdge(1, 2);
+
+        graph.setMeasurement(0, MeasurementBasis::X);
+        double alpha = -3 * M_PI / 4;  // normalized internally by setMeasurement
+        graph.setMeasurement(1, MeasurementBasis::XY, alpha);
+
+        MBQC_Graph original = graph.clone();
+
+        double beta = 9 * M_PI / 4;  // > 2pi
+        graph.YZUnfusion(1, beta);
+
+        auto [basisU, angleU] = graph.getMeasurement(1);
+        CHECK(basisU == MeasurementBasis::XY);
+        CHECK(fAlmostEqual(angleU, normalize_radians(beta)));
+
+        auto [basisNew, angleNew] = graph.getMeasurement(3);
+        CHECK(basisNew == MeasurementBasis::YZ);
+        CHECK(fAlmostEqual(angleNew, normalize_radians(beta - normalize_radians(alpha))));
+
+        CHECK(compareTensors(MBQCtoZXGraph(graph), MBQCtoZXGraph(original)));
+    }
+
+    SUBCASE("On a node with multiple neighbors, in a larger graph") {
+        // 0(in) - 1 - 2 - 3(out)
+        //         |   |
+        //         4---5
+        MBQC_Graph graph(6, {0}, {3});
+        graph.addEdge(0, 1);
+        graph.addEdge(1, 2);
+        graph.addEdge(2, 3);
+        graph.addEdge(1, 4);
+        graph.addEdge(2, 5);
+        graph.addEdge(4, 5);
+
+        graph.setMeasurement(0, MeasurementBasis::X);
+        graph.setMeasurement(1, MeasurementBasis::XY, 3 * M_PI / 4);
+        graph.setMeasurement(2, MeasurementBasis::XZ, M_PI / 4);
+        graph.setMeasurement(4, MeasurementBasis::YZ, M_PI / 2);
+        graph.setMeasurement(5, MeasurementBasis::XY, M_PI);
+
+        MBQC_Graph original = graph.clone();
+
+        double alpha = 3 * M_PI / 4;
+        double beta = M_PI / 4;
+        graph.YZUnfusion(1, beta);
+
+        CHECK(graph.getSize() == 7);
+
+        // Node 1 keeps its original edges plus the new pendant (node 6)
+        auto neighbors1 = graph.getNeighbors(1);
+        std::set<int> neighborSet1(neighbors1.begin(), neighbors1.end());
+        CHECK(neighborSet1 == std::set<int>{0, 2, 4, 6});
+
+        auto neighbors6 = graph.getNeighbors(6);
+        CHECK(neighbors6 == std::vector<int>{1});
+
+        auto [basisNew, angleNew] = graph.getMeasurement(6);
+        CHECK(basisNew == MeasurementBasis::YZ);
+        CHECK(fAlmostEqual(angleNew, normalize_radians(beta - alpha)));
+
+        CHECK(compareTensors(MBQCtoZXGraph(graph), MBQCtoZXGraph(original)));
+    }
+
+    SUBCASE("Node adjacent to output") {
+        MBQC_Graph graph(3, {0}, {2});
+
+        graph.addEdge(0, 1);
+        graph.addEdge(1, 2);
+
+        graph.setMeasurement(0, MeasurementBasis::X);
+        double alpha = 5 * M_PI / 4;
+        graph.setMeasurement(1, MeasurementBasis::XY, alpha);
+
+        MBQC_Graph original = graph.clone();
+
+        double beta = 3 * M_PI / 2;
+        graph.YZUnfusion(1, beta);
+
+        CHECK(compareTensors(MBQCtoZXGraph(graph), MBQCtoZXGraph(original)));
+    }
+
+    SUBCASE("Two sequential unfusions on the same node") {
+        MBQC_Graph graph(3, {0}, {2});
+
+        graph.addEdge(0, 1);
+        graph.addEdge(1, 2);
+
+        graph.setMeasurement(0, MeasurementBasis::X);
+        double alpha = M_PI / 4;
+        graph.setMeasurement(1, MeasurementBasis::XY, alpha);
+
+        MBQC_Graph original = graph.clone();
+
+        double beta1 = M_PI / 2;
+        graph.YZUnfusion(1, beta1);  // node 1: XY(beta1), new node 3: YZ(beta1 - alpha)
+
+        double beta2 = M_PI;
+        graph.YZUnfusion(1, beta2);  // node 1: XY(beta2), new node 4: YZ(beta2 - beta1)
+
+        CHECK(graph.getSize() == 5);
+
+        auto [basisU, angleU] = graph.getMeasurement(1);
+        CHECK(basisU == MeasurementBasis::XY);
+        CHECK(fAlmostEqual(angleU, normalize_radians(beta2)));
+
+        auto [basisFirst, angleFirst] = graph.getMeasurement(3);
+        CHECK(basisFirst == MeasurementBasis::YZ);
+        CHECK(fAlmostEqual(angleFirst, normalize_radians(beta1 - alpha)));
+
+        auto [basisSecond, angleSecond] = graph.getMeasurement(4);
+        CHECK(basisSecond == MeasurementBasis::YZ);
+        CHECK(fAlmostEqual(angleSecond, normalize_radians(beta2 - beta1)));
+
+        // Node 1's neighbors are original neighbor(s) plus both pendants
+        auto neighbors1 = graph.getNeighbors(1);
+        std::set<int> neighborSet1(neighbors1.begin(), neighbors1.end());
+        CHECK(neighborSet1 == std::set<int>{0, 2, 3, 4});
+
+        CHECK(compareTensors(MBQCtoZXGraph(graph), MBQCtoZXGraph(original)));
+    }
+}
+
+
 TEST_CASE("Output Adjustment"){
 
     MBQC_Graph graph(4, {0}, {2});

@@ -1,6 +1,6 @@
 import { useEffect, useRef, RefObject } from 'react';
 import * as d3 from 'd3';
-import { NodeType, Edge, SimEdge, ContextMenuState, OutputAdjustment, LayerLine } from '../types';
+import { NodeType, Edge, SimEdge, ContextMenuState, OutputAdjustment, LayerLine, UnfusionTarget } from '../types';
 import { OUTPUT_TABLE, SVG_DIMENSIONS } from '../utils/constants';
 import { BRUSH_COLORS, getFillColor, getFillColorZX, getLabelColor, getLabelColorZX } from '../utils/colors';
 import { setupAllFilters } from '../rendering/renderFilters';
@@ -15,6 +15,14 @@ import { createExampleDragBehavior } from '../interactions/exampleDrag';
 import { createBrushBehavior } from '../interactions/brushBehavior';
 import { createEdgeDragBehavior } from '../interactions/edgeCreation';
 import { applyNodeInteractions } from '../interactions/nodeInteractions';
+import { createUnfusionAngleDrag } from '../interactions/unfusionAngleDrag';
+import {
+  findUnfusionPairs,
+  renderUnfusionHandles,
+  updateUnfusionHandles,
+  updateUnfusionHandleVisibility,
+  UnfusionPair,
+} from '../rendering/renderUnfusionHandles';
 
 type UseGraphSimulationProps = {
   mainNodes: NodeType[];
@@ -38,6 +46,8 @@ type UseGraphSimulationProps = {
   classicZXcolors?: boolean;
   outputAdjustments?: Record<number, OutputAdjustment>;
   flowLayerLines?: LayerLine[] | null;
+  onYZAngleChange?: (xyNode: NodeType, yzNode: NodeType, angle: number, target: UnfusionTarget) => void;
+  onUnfusionHandleDoubleClick?: (xyNode: NodeType, yzNode: NodeType) => void;
 };
 
 export const useGraphSimulation = ({
@@ -62,11 +72,14 @@ export const useGraphSimulation = ({
   classicZXcolors,
   outputAdjustments,
   flowLayerLines,
+  onYZAngleChange,
+  onUnfusionHandleDoubleClick,
 }: UseGraphSimulationProps) => {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const nodeGroupRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null);
   const panGroupRef = useRef<SVGGElement | null>(null);
   const panOffsetRef = useRef({ x: 0, y: 0 });
+  const unfusionGroupsRef = useRef<d3.Selection<SVGGElement, UnfusionPair, SVGGElement, unknown> | null>(null);
 
   const setPanOffset = (offset: { x: number; y: number }) => {
     panOffsetRef.current = offset;
@@ -94,6 +107,11 @@ export const useGraphSimulation = ({
       nodeGroupRef.current
         .selectAll<SVGCircleElement, NodeType>("circle.halo-odd-correction")
         .style("display", (d) => (oddCorrectionSetIds.includes(d.id) ? null : "none"));
+
+      if (unfusionGroupsRef.current) {
+        const selectedIds = new Set(selectedNodes.map((n) => n.id));
+        updateUnfusionHandleVisibility(unfusionGroupsRef.current, selectedIds);
+      }
     });
 
     return () => cancelAnimationFrame(id);
@@ -192,7 +210,6 @@ export const useGraphSimulation = ({
     // Edges
     const link = renderEdges(panGroup, simEdges);
 
-
     // Main node group
     const nodeGroup = panGroup.append("g").attr("stroke", "#fff");
     nodeGroupRef.current = nodeGroup;
@@ -221,6 +238,31 @@ export const useGraphSimulation = ({
     const labelsT = renderBasisLabels(panGroup, mainNodes, classicZXcolors ? getLabelColorZX : getLabelColor);
     const labelsPhase = renderPhaseLabels(panGroup, mainNodes);
     const outputTableGroups = renderOutputTables(panGroup, mainNodes, outputs, outputAdjustments ?? {});
+
+    // YZ-unfusion angle handles: any XY node with a pendant (degree-1) YZ neighbor gets a
+    // draggable bead on that edge for adjusting beta. Gated on onYZAngleChange so the plain
+    // ZX_Graph view (which never passes it) never renders these.
+    const unfusionPairs = onYZAngleChange ? findUnfusionPairs(simEdges) : [];
+    const unfusionGroups = onYZAngleChange ? renderUnfusionHandles(panGroup, unfusionPairs) : null;
+    unfusionGroupsRef.current = unfusionGroups;
+
+    if (unfusionGroups && onYZAngleChange) {
+      updateUnfusionHandleVisibility(unfusionGroups, new Set(selectedNodes.map((n) => n.id)));
+
+      // Attach interactions to the knob bar only, so the wire/ticks stay purely decorative.
+      const unfusionKnobs = unfusionGroups.select<SVGLineElement>('line.unfusion-knob');
+
+      unfusionKnobs.call(
+        createUnfusionAngleDrag(panGroup, unfusionGroups, onYZAngleChange, labelsPhase) as any
+      );
+
+      if (onUnfusionHandleDoubleClick) {
+        unfusionKnobs.on('dblclick', (event, d) => {
+          event.stopPropagation();
+          onUnfusionHandleDoubleClick(d.xy, d.yz);
+        });
+      }
+    }
 
     // Example nodes
     // Appended directly to svg (not panGroup) so they stay fixed on screen.
@@ -269,6 +311,8 @@ export const useGraphSimulation = ({
 
       labelsT.attr("x", d => d.x!).attr("y", d => d.y!);
       labelsPhase.attr("x", d => d.x!).attr("y", d => d.y!);
+
+      if (unfusionGroups) updateUnfusionHandles(unfusionGroups);
 
       outputTableGroups.attr(
         'transform',

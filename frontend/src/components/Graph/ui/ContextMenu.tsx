@@ -11,6 +11,7 @@ type ContextMenuProps = {
   selectedNodes: NodeType[];
   onRelabeling: () => void;
   onRelabelingPlanar: (basis: string) => void;
+  onYZUnfusion?: () => void;
 };
 
 const fitForRelabeling = (nodes: NodeType[]) => {
@@ -28,6 +29,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
   selectedNodes,
   onRelabeling,
   onRelabelingPlanar,
+  onYZUnfusion,
 }) => {
   if (!visible || !node) return null;
 
@@ -103,6 +105,15 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
               disabled={selectedNodes.length !== 1}
               label={actionIcon + ' Relabel'}
             />
+        )}
+
+        {node.basis === "XY" && onYZUnfusion && (
+          <ActionButton
+            onClick={onYZUnfusion}
+            disabled={selectedNodes.length !== 1}
+            label={actionIcon + ' YZ-Unfuse'}
+            sublabel="Attach a draggable YZ node"
+          />
         )}
       </div>
     </div>

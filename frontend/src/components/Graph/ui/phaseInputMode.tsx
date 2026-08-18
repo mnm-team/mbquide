@@ -2,11 +2,21 @@ import React, { useState, useEffect, useRef } from 'react';
 import { NodeType } from '../types';
 import { NumberButton } from "../../Buttons";
 
+interface TargetOption {
+  value: string;
+  label: string;
+}
+
 interface PhaseInputModalProps {
   node?: NodeType | null;
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (angle: number) => void;
+  title?: string;
+  // Optional target switcher, e.g. for picking which of a pair of nodes the angle applies to.
+  targetOptions?: TargetOption[];
+  selectedTargetValue?: string;
+  onTargetChange?: (value: string) => void;
 }
 
 const parsePiExpression = (input: string): number | null => {
@@ -45,6 +55,10 @@ export const PhaseInputModal: React.FC<PhaseInputModalProps> = ({
   isOpen,
   onClose,
   onSubmit,
+  title,
+  targetOptions,
+  selectedTargetValue,
+  onTargetChange,
 }) => {
   const [value, setValue] = useState<string>('');
   const [parseError, setParseError] = useState<boolean>(false);
@@ -112,8 +126,28 @@ export const PhaseInputModal: React.FC<PhaseInputModalProps> = ({
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-xl font-semibold mb-4">
-          Enter a Phase for Node {node?.id}
+          {title ?? `Enter a Phase for Node ${node?.id}`}
         </h2>
+
+        {targetOptions && targetOptions.length > 0 && (
+          <div className="mb-4 flex rounded-md border border-gray-200 overflow-hidden">
+            {targetOptions.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => onTargetChange?.(opt.value)}
+                className={`flex-1 px-3 py-1.5 text-sm font-medium transition-colors ${
+                  selectedTargetValue === opt.value
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-white text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit}>
           
           {isXYZ && (

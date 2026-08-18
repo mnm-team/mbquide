@@ -40,6 +40,12 @@ export const createRelabelingPlanarOperation = (
   return operation;
 };
 
+export const createYZUnfusionOperation = (nodeId: number, beta: number) => ({
+  operation: "yz-unfusion",
+  node: nodeId,
+  beta,
+});
+
 export const createGetFlowOperation = () => ({
   flow: "pauli",
 });

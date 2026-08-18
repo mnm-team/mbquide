@@ -35,6 +35,10 @@ export type OutputAdjustment = {
   Z: [string, number];
 };
 
+// Which node of a YZ-unfusion pair an angle applies to: the XY node's own angle (beta), or the
+// pendant YZ node's own angle - the other one is then derived via the invariant alpha = xy - yz.
+export type UnfusionTarget = 'xy' | 'yz';
+
 export type GraphProps = {
   nodes: NodeType[];
   edges: Edge[];
@@ -51,6 +55,8 @@ export type GraphProps = {
   runRelabelingPlanar?: (basis: string | undefined) => void;
   runRelabeling?: () => void;
   onPhaseSubmit?: (node?: NodeType, angle?: number) => void;
+  runYZUnfusion?: (node: NodeType) => void;
+  onYZAngleChange?: (xyNode: NodeType, yzNode: NodeType, angle: number, target: UnfusionTarget) => void;
   buildingMode?: boolean
   centerGraphTrigger?: number;
   flowLayerLines?: LayerLine[] | null;

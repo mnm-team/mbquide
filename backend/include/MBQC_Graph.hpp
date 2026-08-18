@@ -82,6 +82,7 @@ public:
     void relabelPlanar(int u, MeasurementBasis preferredBasis);
     void relabelPlanar(int u);
     void mergeYZ(int u, int v);
+    void YZUnfusion(int u, double beta);
     
     // Simplification:
     void simplify(int maxIterations = 1000);

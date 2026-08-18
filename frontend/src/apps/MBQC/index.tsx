@@ -11,6 +11,7 @@ import { useCanOptimizeEdges } from './hooks/useCanOptimizeEdges';
 import { ControlPanel } from '../../components/ControlPanel';
 import { BuildingModeToggle } from './ui/buildingModeToggle';
 import { getCenterOfNodes, hasNodeCrossedLayer } from './utils/positioning';
+import { parsePhaseString, normalizeRadians } from '../../components/Graph/utils/angles';
 import {
   createLocalComplementationOperation,
   createPivotOperation,
@@ -18,6 +19,7 @@ import {
   createZDeletionOperation,
   createRelabelingOperation,
   createRelabelingPlanarOperation,
+  createYZUnfusionOperation,
   createGetFlowOperation,
   createFocusFlowOperation,
   createSimulateOperation,
@@ -227,6 +229,45 @@ export default function MBQC_App() {
     if (selectedNodes.length !== 1) return;
     runGraphOperation(createRelabelingPlanarOperation(selectedNodes[0].id, basis));
   }, [selectedNodes, runGraphOperation]);
+
+  // Attaches a fresh YZ pendant born at angle 0 (beta = the node's current angle), so the graph
+  // is unchanged until the user drags or types a new beta on the new handle.
+  const handleYZUnfusion = useCallback((node: NodeType) => {
+    const alpha = parsePhaseString(node.phase);
+    const pos: [number, number] = [(node.x ?? 0) + 70, (node.y ?? 0) - 70];
+    runGraphOperation(createYZUnfusionOperation(node.id, alpha), { pos });
+  }, [runGraphOperation]);
+
+  // Commits an angle change from the drag handle (always target: 'xy') or its free-text modal
+  // (either node). Recomputes the alpha invariant (xyNode.phase - yzNode.phase) from the
+  // pre-edit phases rather than trusting the caller to have already applied it, so it stays
+  // correct however it's called; the node not directly targeted is then derived from it.
+  const handleYZAngleChange = useCallback(async (
+    xyNode: NodeType,
+    yzNode: NodeType,
+    angle: number,
+    target: 'xy' | 'yz' = 'xy',
+  ) => {
+    saveCurrentStateToHistory();
+
+    const alpha = normalizeRadians(parsePhaseString(xyNode.phase) - parsePhaseString(yzNode.phase));
+    const newAngle = normalizeRadians(angle);
+    const newBeta = target === 'xy' ? newAngle : normalizeRadians(newAngle + alpha);
+    const newYzPhase = normalizeRadians(newBeta - alpha);
+
+    const updatedNodes = nodes.map(n => {
+      if (n.id === xyNode.id) return { ...n, phase: newBeta.toString() };
+      if (n.id === yzNode.id) return { ...n, phase: newYzPhase.toString() };
+      return n;
+    });
+    setNodes(updatedNodes);
+
+    await writeGraph(updatedNodes, edges, inputs, outputs, adjustments);
+    fetchGraphPreservePositions(nodes);
+  }, [
+    nodes, edges, inputs, outputs, adjustments,
+    setNodes, writeGraph, fetchGraphPreservePositions, saveCurrentStateToHistory,
+  ]);
 
   const handleSimulate = useCallback(async () => {
     await runGraphOperation(createSimulateOperation());
@@ -534,6 +575,8 @@ export default function MBQC_App() {
           onNodeDelete={handleNodeDelete}
           onCreateNewEdge={handleEdgeCreation}
           onPhaseSubmit={handlePhaseSet}
+          runYZUnfusion={handleYZUnfusion}
+          onYZAngleChange={handleYZAngleChange}
           buildingMode={buildingMode}
           centerGraphTrigger={centerGraphTrigger}
           flowLayerLines={flowLayerLines}
