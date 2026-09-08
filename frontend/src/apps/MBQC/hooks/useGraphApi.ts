@@ -120,6 +120,7 @@ export const useGraphApi = ({
         customOutputs,
         customAdjustments
       );
+      setSimulatable(false);
     } catch (error) {
       console.error('Error writing graph to backend:', error);
     }
@@ -149,6 +150,7 @@ export const useGraphApi = ({
       const updatedGraphData = await executeGraphOperation(operationParams);
       updateGraph(updatedGraphData, graphOptions);
       setFlowFocusable(false);
+      setSimulatable(false);
       setSelectedNodes([]);
     } catch (error) {
       console.error(`Error running graph operation:`, error);

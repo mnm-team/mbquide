@@ -263,18 +263,30 @@ export default function MBQC_App() {
     angle: number,
     target: 'xy' | 'yz' = 'xy',
   ) => {
+    const currentBeta = parsePhaseString(xyNode.phase);
+    const currentYzPhase = parsePhaseString(yzNode.phase);
+    const alpha = normalizeRadians(currentBeta - currentYzPhase);
+    const newAngle = normalizeRadians(angle);
+    const newBeta = target === 'xy' ? newAngle : normalizeRadians(newAngle + alpha);
+    const newYzPhase = normalizeRadians(newBeta - alpha);
+
+    // The drag handle mutates xyNode/yzNode in place (see comment above), so by the time a
+    // drag commits, currentBeta/currentYzPhase already equal the new values - compare against
+    // the pre-drag snapshot instead so a drag that ends back where it started is still a no-op.
+    const preDragNodes = yzDragSnapshotRef.current?.nodes;
+    const noOpBeta = preDragNodes ? parsePhaseString(preDragNodes.find(n => n.id === xyNode.id)?.phase) : currentBeta;
+    const noOpYzPhase = preDragNodes ? parsePhaseString(preDragNodes.find(n => n.id === yzNode.id)?.phase) : currentYzPhase;
+
+    if (newBeta === noOpBeta && newYzPhase === noOpYzPhase) return;
+
     if (yzDragSnapshotRef.current) {
       saveToHistory(yzDragSnapshotRef.current);
       yzDragSnapshotRef.current = null;
       setFlowLayerLines(null);
+      setSimulatable(false);
     } else {
       saveCurrentStateToHistory();
     }
-
-    const alpha = normalizeRadians(parsePhaseString(xyNode.phase) - parsePhaseString(yzNode.phase));
-    const newAngle = normalizeRadians(angle);
-    const newBeta = target === 'xy' ? newAngle : normalizeRadians(newAngle + alpha);
-    const newYzPhase = normalizeRadians(newBeta - alpha);
 
     const updatedNodes = nodes.map(n => {
       if (n.id === xyNode.id) return { ...n, phase: newBeta.toString() };
