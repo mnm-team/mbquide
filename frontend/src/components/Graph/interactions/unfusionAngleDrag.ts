@@ -1,6 +1,16 @@
 import * as d3 from 'd3';
 import { NodeType, UnfusionTarget } from '../types';
-import { UnfusionPair, getTravelSegment, updateUnfusionHandles } from '../rendering/renderUnfusionHandles';
+import {
+  UnfusionPair,
+  getTravelSegment,
+  updateUnfusionHandles,
+  cancelUnfusionTooltipHover,
+  scheduleUnfusionTooltipHover,
+} from '../rendering/renderUnfusionHandles';
+
+// Matches the default fade duration in renderUnfusionHandles.ts - kept as a plain constant here
+// since the drag behavior doesn't otherwise take a tooltip-transition parameter.
+const TOOLTIP_FADE_MS = 200;
 import { normalizeRadians, parsePhaseString, snapToEighthPi, formatEighthPi } from '../utils/angles';
 
 // Dragging slides the handle along the (inset) XY <-> YZ travel segment, snapping to pi/8 steps
@@ -39,6 +49,10 @@ export const createUnfusionAngleDrag = (
 
       d3.select(this.parentNode as Element).raise();
       d3.select(this).style('cursor', 'grabbing');
+
+      // The tooltip is only for a resting hover, not while the knob is being dragged - hide it
+      // (and cancel any pending reveal) for the duration of the drag.
+      cancelUnfusionTooltipHover(this, TOOLTIP_FADE_MS);
     })
     .on('drag', (event, d) => {
       moved = true;
@@ -71,6 +85,10 @@ export const createUnfusionAngleDrag = (
     })
     .on('end', function (_event, d) {
       d3.select(this).style('cursor', 'grab');
+
+      // Resting on the knob after releasing the drag still reveals the tooltip, just after the
+      // same hover delay as a fresh mouseenter.
+      scheduleUnfusionTooltipHover(this, TOOLTIP_FADE_MS);
 
       // A plain click (no movement) fires a full drag start/end with nothing to commit.
       // Skip it: committing here would re-render the whole graph and tear down the DOM

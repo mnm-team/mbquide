@@ -2,6 +2,15 @@ import * as d3 from 'd3';
 import { NodeType, SimEdge } from '../types';
 import { normalizeRadians, parsePhaseString } from '../utils/angles';
 import { NODE_SIZES } from '../utils/constants';
+import {
+  TOOLTIP_BG,
+  TOOLTIP_TEXT_COLOR,
+  TOOLTIP_RADIUS,
+  TOOLTIP_PADDING_X,
+  TOOLTIP_GAP,
+  UNFUSION_TOOLTIP_FONT_SIZE,
+  getTooltipHeight,
+} from '../../Tooltip';
 
 // A "YZ-unfusion" edge: an XY node with a pendant YZ node (degree 1) hanging off it. The
 // pendant's angle is fully determined by the XY node's angle (beta) and is thus rendered as a
@@ -71,6 +80,10 @@ const getWireSegment = (pair: UnfusionPair) => insetSegment(pair, NODE_SIZES.CIR
 // Half-length of the perpendicular bar drawn at the bead's position.
 const BAR_HALF_LENGTH = 9;
 
+// Hover tooltip on the knob, styled after ActionButton's `sublabelAsTooltip` pill (see
+// ../../Tooltip.tsx for the shared style constants).
+const UNFUSION_TOOLTIP_TEXT = 'Double-click to enter an exact angle';
+
 // The bead's travel path gets a little extra breathing room beyond the node borders.
 export const getTravelSegment = (pair: UnfusionPair) => insetSegment(pair, NODE_SIZES.CIRCLE_RADIUS + 4);
 
@@ -80,9 +93,55 @@ export const getTravelSegment = (pair: UnfusionPair) => insetSegment(pair, NODE_
 export const handleFraction = (pair: UnfusionPair): number =>
   1 - normalizeRadians(parsePhaseString(pair.xy.phase)) / (2 * Math.PI);
 
+// How long the pointer must rest on the knob before the tooltip appears - long enough that it
+// doesn't flash in while just passing over the wire or grabbing the knob to start a drag.
+const TOOLTIP_HOVER_DELAY_MS = 1500;
+
+// Pending "show the tooltip" timers, keyed by the knob DOM node so a mouseleave (or a drag
+// start, see unfusionAngleDrag.ts) can cancel one before it fires.
+const hoverTimers = new WeakMap<SVGLineElement, ReturnType<typeof setTimeout>>();
+
+const clearHoverTimer = (node: SVGLineElement) => {
+  const existing = hoverTimers.get(node);
+  if (existing !== undefined) {
+    clearTimeout(existing);
+    hoverTimers.delete(node);
+  }
+};
+
+const fadeTooltip = (node: SVGLineElement, opacity: 0 | 1, durationMs: number) => {
+  d3.select(node.parentNode as SVGGElement)
+    .select('g.unfusion-tooltip')
+    .transition('unfusion-tooltip-fade')
+    .duration(durationMs)
+    .style('opacity', opacity);
+};
+
+// Hides the tooltip (if shown) and cancels any pending reveal. Exported so the drag behavior in
+// unfusionAngleDrag.ts - which shares these same knob nodes - can suppress the tooltip for the
+// duration of a drag instead of letting it pop up while the bead is being moved.
+export const cancelUnfusionTooltipHover = (node: SVGLineElement, tooltipTransitionMs: number) => {
+  clearHoverTimer(node);
+  fadeTooltip(node, 0, tooltipTransitionMs);
+};
+
+// (Re)starts the hover-delay countdown to reveal the tooltip. Also used by unfusionAngleDrag.ts
+// on drag end, so resting on the knob after a drag still reveals the tooltip after the delay.
+export const scheduleUnfusionTooltipHover = (node: SVGLineElement, tooltipTransitionMs: number) => {
+  clearHoverTimer(node);
+  const timer = setTimeout(() => {
+    hoverTimers.delete(node);
+    fadeTooltip(node, 1, tooltipTransitionMs);
+  }, TOOLTIP_HOVER_DELAY_MS);
+  hoverTimers.set(node, timer);
+};
+
 export const renderUnfusionHandles = (
   panGroup: d3.Selection<SVGGElement, unknown, null, undefined>,
-  pairs: UnfusionPair[]
+  pairs: UnfusionPair[],
+  // Just the fade-in/out transition itself - the "shouldn't flash in immediately" behavior now
+  // comes from TOOLTIP_HOVER_DELAY_MS above, so this only needs to be a quick, ordinary fade.
+  tooltipTransitionMs = 200
 ) => {
   const layer = panGroup.append('g').attr('class', 'unfusion-handles');
 
@@ -128,7 +187,7 @@ export const renderUnfusionHandles = (
     .attr('stroke-linecap', 'round')
     .style('pointer-events', 'none');
 
-  groups
+  const knobs = groups
     .append('line')
     .attr('class', 'unfusion-knob')
     .attr('stroke', '#FF9933')
@@ -136,6 +195,53 @@ export const renderUnfusionHandles = (
     .attr('stroke-linecap', 'round')
     .style('cursor', 'grab')
     .style('pointer-events', 'all');
+
+  // Hover tooltip for the knob, styled like ActionButton's `sublabelAsTooltip` (dark rounded
+  // pill, white text, fades in above the target) but drawn in SVG since the knob lives on the
+  // d3-rendered canvas rather than in React.
+  const tooltips = groups
+    .append('g')
+    .attr('class', 'unfusion-tooltip')
+    .style('opacity', 0)
+    .style('pointer-events', 'none');
+
+  tooltips
+    .append('rect')
+    .attr('class', 'unfusion-tooltip-bg')
+    .attr('rx', TOOLTIP_RADIUS)
+    .attr('ry', TOOLTIP_RADIUS)
+    .attr('fill', TOOLTIP_BG);
+
+  tooltips
+    .append('text')
+    .attr('class', 'unfusion-tooltip-text')
+    .attr('fill', TOOLTIP_TEXT_COLOR)
+    .attr('font-size', UNFUSION_TOOLTIP_FONT_SIZE)
+    .attr('font-family', 'inherit')
+    .attr('text-anchor', 'middle')
+    .attr('dominant-baseline', 'middle')
+    .text(UNFUSION_TOOLTIP_TEXT);
+
+  // Size the pill to the rendered text (fixed text, so this only needs to run once per handle).
+  const tooltipHeight = getTooltipHeight(UNFUSION_TOOLTIP_FONT_SIZE);
+  tooltips.each(function () {
+    const g = d3.select(this);
+    const textNode = g.select<SVGTextElement>('text.unfusion-tooltip-text').node();
+    const textWidth = textNode ? textNode.getComputedTextLength() : 0;
+    g.select('rect.unfusion-tooltip-bg')
+      .attr('width', textWidth + TOOLTIP_PADDING_X * 2)
+      .attr('height', tooltipHeight)
+      .attr('x', -(textWidth / 2 + TOOLTIP_PADDING_X))
+      .attr('y', -tooltipHeight / 2);
+  });
+
+  knobs
+    .on('mouseenter', function () {
+      scheduleUnfusionTooltipHover(this as SVGLineElement, tooltipTransitionMs);
+    })
+    .on('mouseleave', function () {
+      cancelUnfusionTooltipHover(this as SVGLineElement, tooltipTransitionMs);
+    });
 
   updateUnfusionHandles(groups);
 
@@ -175,6 +281,11 @@ export const updateUnfusionHandles = (
     g.selectAll('line.unfusion-knob-outline, line.unfusion-knob')
       .attr('x1', hx - perpX).attr('y1', hy - perpY)
       .attr('x2', hx + perpX).attr('y2', hy + perpY);
+
+    // Tooltip pill sits directly above the bead, mirroring the `bottom-full mb-2` placement
+    // used for ActionButton's tooltip.
+    g.select('g.unfusion-tooltip')
+      .attr('transform', `translate(${hx}, ${hy - BAR_HALF_LENGTH - TOOLTIP_GAP})`);
   });
 };
 

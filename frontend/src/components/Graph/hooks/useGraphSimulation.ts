@@ -245,12 +245,14 @@ export const useGraphSimulation = ({
 
     // YZ-unfusion angle handles: any XY node with a pendant (degree-1) YZ neighbor gets a
     // draggable bead on that edge for adjusting beta. Gated on onYZAngleChange so the plain
-    // ZX_Graph view (which never passes it) never renders these.
-    const unfusionPairs = onYZAngleChange ? findUnfusionPairs(simEdges) : [];
-    const unfusionGroups = onYZAngleChange ? renderUnfusionHandles(panGroup, unfusionPairs) : null;
+    // ZX_Graph view (which never passes it) never renders these, and hidden while building
+    // mode is active since the handles would otherwise clutter node placement/wiring.
+    const showUnfusionHandles = !!onYZAngleChange && !buildingMode;
+    const unfusionPairs = showUnfusionHandles ? findUnfusionPairs(simEdges) : [];
+    const unfusionGroups = showUnfusionHandles ? renderUnfusionHandles(panGroup, unfusionPairs) : null;
     unfusionGroupsRef.current = unfusionGroups;
 
-    if (unfusionGroups && onYZAngleChange) {
+    if (unfusionGroups && showUnfusionHandles) {
       updateUnfusionHandleVisibility(unfusionGroups, new Set(selectedNodes.map((n) => n.id)));
 
       // Attach interactions to the knob bar only, so the wire/ticks stay purely decorative.
