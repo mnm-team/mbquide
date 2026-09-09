@@ -209,7 +209,8 @@ export const useSimulatorRendering = ({
     const node = nodeGroup
       .selectAll<SVGGElement, NodeType>("g")
       .data(nodes)
-      .join("g");
+      .join("g")
+      .attr("data-node-id", (d) => d.id);
 
     node.on("click", function (_event, clicked) {
       setSelectedNodes([clicked]);

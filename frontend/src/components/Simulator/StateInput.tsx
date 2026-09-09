@@ -190,7 +190,7 @@ export default function StateInput({
       </div>
 
       {/* Center: statevector inputs or info message */}
-      <div className="flex-1 flex">
+      <div className="flex-1 flex min-w-0">
         {numQubits > 4 ? (
           <div className="h-full flex items-center px-4 py-2 text-sm text-slate-500">
             Statevector input is disabled for systems with more than 4 input qubits.

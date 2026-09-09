@@ -7,6 +7,11 @@ import QASMInput_App from './apps/QASM_Input_App';
 import Home from './home';
 import './styles/graph.css';
 import SimulatorApp from './apps/Simulator_App';
+import TutorialApp from './apps/Tutorial';
+import TutorialDetailApp from './apps/Tutorial/Detail';
+import TutorialHelpButton from './components/TutorialHelpButton';
+import { TutorialOverlayProvider } from './apps/Tutorial/TutorialOverlayContext';
+import TutorialOverlay from './apps/Tutorial/TutorialOverlay';
 
 
 function Launcher() {
@@ -14,13 +19,19 @@ function Launcher() {
   return (
     <React.StrictMode>
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/MBQC" element={<MBQC_App />} />
-          <Route path="/QASM" element={<QASMInput_App />} />
-          <Route path="/ZX" element={<ZX_App />} />
-          <Route path="/SIM" element={<SimulatorApp />} />
-        </Routes>
+        <TutorialOverlayProvider>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/MBQC" element={<MBQC_App />} />
+            <Route path="/QASM" element={<QASMInput_App />} />
+            <Route path="/ZX" element={<ZX_App />} />
+            <Route path="/SIM" element={<SimulatorApp />} />
+            <Route path="/TUTORIAL" element={<TutorialApp />} />
+            <Route path="/TUTORIAL/:id" element={<TutorialDetailApp />} />
+          </Routes>
+          <TutorialHelpButton />
+          <TutorialOverlay />
+        </TutorialOverlayProvider>
       </BrowserRouter>
   </React.StrictMode>
   );

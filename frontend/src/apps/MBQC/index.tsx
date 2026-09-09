@@ -619,7 +619,10 @@ export default function MBQC_App() {
         />
 
         {/* OVERLAY CONTROL PANEL */}
-        <div className="pointer-events-none absolute bottom-4 left-1/2 z-[1000] w-full -translate-x-1/2">
+        <div
+          data-tutorial-hide="control-panel"
+          className="pointer-events-none absolute bottom-4 left-1/2 z-[1000] w-full -translate-x-1/2"
+        >
           <div className="pointer-events-auto flex justify-center px-2">
             <div className="w-fit max-w-[100vw] rounded-2xl border border-black/10 bg-white/10 p-2 backdrop-blur-xl">
               <ControlPanel

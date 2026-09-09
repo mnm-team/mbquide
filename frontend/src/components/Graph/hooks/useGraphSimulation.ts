@@ -223,6 +223,9 @@ export const useGraphSimulation = ({
       .data(mainNodes)
       .join("g")
       .attr("class", "node")
+      // Lets external tooling (e.g. the tutorial-recording scripts in src/apps/Tutorial/scripts)
+      // target a specific node reliably instead of relying on screen position.
+      .attr("data-node-id", (d) => d.id)
       .call(createNodeDragBehavior(simulation, selectedNodesRef, setSelectedNodes, onSelectionChange, onNodeDragEnd, onNodeDragStart) as any);
 
     applyNodeInteractions(
@@ -273,7 +276,7 @@ export const useGraphSimulation = ({
     // Example nodes
     // Appended directly to svg (not panGroup) so they stay fixed on screen.
     const exampleNodes = createExampleNodes();
-    const exampleGroup = svg.append("g").attr("class", "examples");
+    const exampleGroup = svg.append("g").attr("class", "examples").attr("data-tutorial-hide", "example-palette");
 
     const example = exampleGroup
       .selectAll<SVGGElement, NodeType>("g")

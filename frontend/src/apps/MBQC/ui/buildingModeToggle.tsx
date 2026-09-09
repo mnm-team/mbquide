@@ -7,7 +7,7 @@ type BuildingModeToggleProps = {
 
 export const BuildingModeToggle = ({ buildingMode, setBuildingMode }: BuildingModeToggleProps) => {
   return (
-    <div className="absolute top-8 right-8 z-10">
+    <div data-tutorial-hide="building-mode-toggle" className="absolute top-8 right-8 z-10">
       <label className="relative inline-flex cursor-pointer items-center">
         <span className="ml-0 mr-3 text-lg font-medium text-black">
           Building Mode (B)
