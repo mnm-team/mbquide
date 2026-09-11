@@ -17,12 +17,14 @@ using json = nlohmann::json;
 #include "Tensornetwork.hpp"
 
 
+/// Which concrete simulation backend a Simulator/SimulatorBackendHandle uses: dense StatevectorSimulator or TensorNetworkSimulator.
 enum class SimulatorBackendType {
     Statevector,
     TensorNetwork
 };
 
-// Accepts "statevector"/"sv" and "TensorNetwork"/"tn" (case-insensitive).
+/// Parses a SimulatorBackendType from a name. Accepts `"statevector"`/`"sv"` and `"tensornetwork"`/`"tn"` (case-insensitive).
+/// @throws std::invalid_argument if `backend` doesn't match a known name.
 inline SimulatorBackendType parseSimulatorBackendType(const std::string& backend) {
     std::string b = backend;
     std::transform(b.begin(), b.end(), b.begin(), ::tolower);
@@ -31,12 +33,17 @@ inline SimulatorBackendType parseSimulatorBackendType(const std::string& backend
     throw std::invalid_argument("Simulator: unknown backend '" + backend + "' (expected statevector/sv or tensornetwork/tn)");
 }
 
-// Wraps whichever concrete backend is active behind a single set of calls,
-// so the rest of Simulator doesn't need to know which one it's talking to.
+/**
+ * @brief Wraps whichever concrete simulator backend
+ * (StatevectorSimulator or TensorNetworkSimulator) is active behind a single
+ * set of calls, dispatched via `std::variant`/`std::visit`, so Simulator
+ * doesn't need to know which one it's talking to.
+ */
 class SimulatorBackendHandle {
 public:
     SimulatorBackendHandle() = default;
 
+    /// (Re)initializes the active backend as a fresh `n`-qubit `|00...0>` state of the given type.
     void init(SimulatorBackendType type, int n, bool random) {
         backendType = type;
         switch (type) {
@@ -49,48 +56,62 @@ public:
         }
     }
 
+    /// Which backend type is currently active.
     SimulatorBackendType getBackendType() const { return backendType; }
 
+    /// The active backend's current qubit count.
     int get_num_qubits() const {
         return std::visit([](auto& s) { return s.get_num_qubits(); }, impl);
     }
 
+    /// Appends a new `|+>` qubit on the active backend; see StatevectorSimulator::add_qubit_plus()/TensorNetworkSimulator::add_qubit_plus().
     int add_qubit_plus() {
         return std::visit([](auto& s) { return s.add_qubit_plus(); }, impl);
     }
 
+    /// Applies a controlled-Z gate on the active backend.
     void CZ(int u, int v) {
         std::visit([&](auto& s) { s.CZ(u, v); }, impl);
     }
 
+    /// Applies a Hadamard gate on the active backend.
     void H(int q) { std::visit([&](auto& s) { s.H(q); }, impl); }
+    /// Applies a Pauli-Z gate on the active backend.
     void Z(int q) { std::visit([&](auto& s) { s.Z(q); }, impl); }
+    /// Applies an S gate on the active backend.
     void S(int q) { std::visit([&](auto& s) { s.S(q); }, impl); }
 
+    /// Reorders qubits on the active backend; see StatevectorSimulator::reorderQubits()/TensorNetworkSimulator::reorderQubits().
     void reorderQubits(const std::vector<int>& permutation) {
         std::visit([&](auto& s) { s.reorderQubits(permutation); }, impl);
     }
 
+    /// Measures a qubit in an MBQC basis/angle on the active backend; see StatevectorSimulator::measure_qubit_in_basis()/TensorNetworkSimulator::measure_qubit_in_basis().
     int measure_qubit_in_basis(int q, MeasurementBasis basis, double angle) {
         return std::visit([&](auto& s) { return s.measure_qubit_in_basis(q, basis, angle); }, impl);
     }
 
+    /// Overwrites the active backend's entire state; see StatevectorSimulator::setState()/TensorNetworkSimulator::setState().
     void setState(const StatevectorSimulator::VectorC& state) {
         std::visit([&](auto& s) { s.setState(state); }, impl);
     }
 
+    /// The active backend's current state as a bra-ket string.
     std::string getStatevectorBraKet() const {
         return std::visit([](auto& s) { return s.getStatevectorBraKet(); }, impl);
     }
 
+    /// The active backend's current state as JSON.
     json toJson() const {
         return std::visit([](auto& s) { return s.toJson(); }, impl);
     }
 
+    /// The active backend as a StatevectorSimulator. Only valid when `getBackendType() == SimulatorBackendType::Statevector`.
     StatevectorSimulator getStatevectorSimulator() const {
         return std::get<StatevectorSimulator>(impl);
     }
 
+    /// The active backend as a TensorNetworkSimulator. Only valid when `getBackendType() == SimulatorBackendType::TensorNetwork`.
     TensorNetworkSimulator getTensorNetworkSimulator() const {
         return std::get<TensorNetworkSimulator>(impl);
     }
@@ -101,6 +122,27 @@ private:
 };
 
 
+/**
+ * @brief Drives step-by-step execution of an MBQC_Graph pattern given a
+ * PauliFlowResult, on top of a SimulatorBackendHandle.
+ *
+ * Owns a clone of the graph (so measurement corrections can be rewritten
+ * in place — see rotateGraphNodeX()/rotateGraphNodeZ() — without touching
+ * the session's own graph) and tracks, per vertex: whether it has been
+ * *activated* (allocated a backend qubit — see activateNode()/
+ * activateAllNecessary()), whether it is *ready to measure* (its X/Z
+ * correction dependencies are resolved — recomputeReadyToMeasure()), and
+ * whether it has been *measured*. step() measures one ready vertex,
+ * applies the flow's Pauli corrections to every dependent vertex per the
+ * "strong uniform stepwise determinism" result of <https://arxiv.org/abs/2410.23439>, then
+ * (if `conveyorBelt` is set) activates whatever newly became necessary —
+ * so at any point only the qubits actually needed so far are held in the
+ * backend, rather than the whole pattern at once. simulateAll()/
+ * runAndGetOutput() drive this to completion in one call.
+ *
+ * Constructed once per REST API session's simulation (see `/api/sim` in
+ * `server.cpp`), from the session's current MBQC_Graph and PauliFlowResult.
+ */
 class Simulator {
 
 private:
@@ -126,6 +168,9 @@ private:
     std::set<int> readyToMeasure;
 
     std::vector<int> qubitToGraphNode;
+    // Reverse lookup of qubitToGraphNode: the backend qubit index currently
+    // holding graph node n, or -1 if n has no qubit right now (not yet
+    // activated, or already measured/traced out).
     int graphNodeToQubit(int n) {
         auto it = std::find(qubitToGraphNode.begin(), qubitToGraphNode.end(), n);
         if (it != qubitToGraphNode.end()) {
@@ -135,6 +180,10 @@ private:
         return -1;  // means the qubit for this node does not exist
     }
 
+    // Rewrites graph node u's measurement (or, for an output, its
+    // OutputAdjustmentMap) to fold in a Z correction, i.e. what measuring u
+    // would see after an X gate on its qubit - without touching the qubit
+    // itself. Used to defer corrections symbolically (see class docs).
     void rotateGraphNodeZ(int u) {
         auto [basis, angle] = graph.getMeasurement(u);
         switch (basis) {
@@ -164,6 +213,7 @@ private:
         graph.setMeasurement(u, basis, angle);
     }
 
+    // Same as rotateGraphNodeZ(), but for folding in an X correction.
     void rotateGraphNodeX(int u) {
         auto [basis, angle] = graph.getMeasurement(u);
         switch (basis) {
@@ -178,7 +228,7 @@ private:
             case MeasurementBasis::XY:
                 angle = -angle;
                 break;
-            case MeasurementBasis::YZ: 
+            case MeasurementBasis::YZ:
                 angle = angle + M_PI;
                 break;
             case MeasurementBasis::XZ:
@@ -193,6 +243,7 @@ private:
         graph.setMeasurement(u, basis, angle);
     }
 
+    // Dispatches to rotateGraphNodeX()/rotateGraphNodeZ() by axis ("X" or "Z").
     void rotateGraphNode(int u, std::string axis) {
         if (axis == "Z") {
             rotateGraphNodeZ(u);
@@ -210,7 +261,7 @@ private:
     // Implementing the impact of https://arxiv.org/pdf/2207.09368v4 2.2
     // -> A measurement impacts a vertex if the action of the correction anticommutes with one Pauli element of λ (MeasurementBasis)
     //
-    // corrType is one of {"X", "Z", "Y"} 
+    // corrType is one of {"X", "Z", "Y"}
     bool correctionHasNoImpact(int node, char corrType) const {
         auto [basis, angle] = graph.getMeasurement(node);
 
@@ -261,6 +312,9 @@ private:
         }
     }
 
+    // Whether u has any neighbor that is currently active or was already
+    // deactivated (i.e. measured) - used to decide whether u needs to be
+    // activated to let its neighbors' edges be formed.
     bool neighboringActivated(int u) {
         std::vector<int> neighbors = graph.getNeighbors(u);
         for (int n : graph.getNeighbors(u)) {
@@ -306,12 +360,22 @@ private:
             }
         }
     }
-    
-    
 
-    
+
+
+
 public:
     Simulator() = default;
+    /**
+     * @brief Constructs a simulator for `g` under Pauli flow `flow`.
+     * @param g The MBQC graph to execute (cloned internally).
+     * @param flow A Pauli flow for `g` (see findPauliFlow()); must have `flow.ok == true`.
+     * @param random Whether measurements sample outcomes randomly (Born rule) or deterministically return 0.
+     * @param inputState Optional bra-ket string (see StatevectorSimulator::parseBraKet()) to initialize the input qubits to instead of `|00...0>`.
+     * @param maxVecSizeJSON Above this many amplitudes, toJson()/reorderQubitsCanonically() skip materializing/reordering the full statevector (it's still simulated correctly, just not serialized/canonicalized on every step).
+     * @param conveyorBelt If true, activateAllNecessary() runs automatically after construction and after every step() (streaming qubit allocation); if false, activateAll() runs once upfront (every qubit allocated immediately).
+     * @param backend Which SimulatorBackendType to use (see parseSimulatorBackendType()).
+     */
     Simulator(const MBQC_Graph& g, const PauliFlowResult& flow, bool random = true, std::string inputState = "", int maxVecSizeJSON = 128, bool conveyorBelt = true, std::string backend = "tensornetwork")
         : graph(g.clone()), flow(flow), randomMeasurements(random), inputStateString(inputState), maxVecSizeJSON(maxVecSizeJSON), conveyorBelt(conveyorBelt), backendType(parseSimulatorBackendType(backend))
     {
@@ -330,7 +394,7 @@ public:
 
         // Init everything
         initStatevector(inputStateString);
-        
+
         // Build reverse flow dependencies
         for (const auto& [node, deps] : flow.corrf) {
             for (int dep : deps) {
@@ -346,35 +410,40 @@ public:
         // Start by making the inputs readyToMeasure
         for (int i : graph.getInputs()) {
             readyToMeasure.insert(i);
-        } 
-        
+        }
+
         conveyorBelt ? activateAllNecessary() : activateAll();
 
     }
 
+    /// The current backend state as a bra-ket string.
     std::string getStatevectorBraKet() const {
         return backendSim.getStatevectorBraKet();
     }
 
+    /// The active backend as a StatevectorSimulator. Only valid when `getBackendType() == SimulatorBackendType::Statevector`.
     StatevectorSimulator getStatevectorSimulator() const {
         return backendSim.getStatevectorSimulator();
     }
 
+    /// The active backend as a TensorNetworkSimulator. Only valid when `getBackendType() == SimulatorBackendType::TensorNetwork`.
     TensorNetworkSimulator getTensorNetworkSimulator() const {
         return backendSim.getTensorNetworkSimulator();
     }
 
+    /// Which SimulatorBackendType this simulator is using.
     SimulatorBackendType getBackendType() const {
         return backendType;
     }
 
+    /// Serializes the simulator's full state for the REST API: the graph, flow, ready/measured node sets, measurement outcomes, active edges/nodes, and (if small enough — see `maxVecSizeJSON`) the current statevector.
     json toJson() const {
         json j;
 
         j["graph"] = graph.toJson();
         j["flow"] = PauliFlowResultToJson(flow);
 
-        
+
         j["readyToMeasure"] = readyToMeasure;
         j["measured"] = measured;
         j["outcomes"] = measurementOutcomes;
@@ -384,7 +453,7 @@ public:
             j["statevector"] = backendSim.toJson();
         }
         j["activeEdges"] = activeEdges;
-        
+
         // The reverse of qubitToGraph has already the right order of statevecotr
         std::vector<int> active = qubitToGraphNode;
         std::reverse(active.begin(), active.end());
@@ -393,6 +462,7 @@ public:
         return j;
     }
 
+    /// Updates `qubitToGraphNode` bookkeeping after backend qubit `q` was traced out (removed), shifting every higher qubit index down by one to match.
     void tracedOutQubit(int q) {
         if (q < 0 || q >= qubitToGraphNode.size()) {
             std::cerr << "Invalid qubit index!" << std::endl;
@@ -403,19 +473,22 @@ public:
         for (int i = q + 1; i < qubitToGraphNode.size(); ++i) {
             qubitToGraphNode[i-1] = qubitToGraphNode[i];
         }
-        
+
         // remove last qubit (redundant after shift)
         qubitToGraphNode.pop_back();
     }
 
+    /// Whether `nodeId` is currently ready to be measured (step()-able).
     bool isReady(int nodeId) const {
         return readyToMeasure.count(nodeId) > 0;
     }
 
+    /// The set of vertex ids currently ready to be measured.
     std::set<int> getReadyNodes() const {
         return readyToMeasure;
     }
 
+    /// Whether `nodeId` is finished: measured (for a non-output), or has no pending output adjustment left to apply (for an output — see OutputAdjustmentMap::isStandard()).
     bool isDone(int nodeId) const {
 
         if (graph.isOutput(nodeId)) {
@@ -430,22 +503,27 @@ public:
         return isMeasured(nodeId);
     }
 
+    /// Whether `nodeId` has already been measured (step()-ed).
     bool isMeasured(int nodeId) const {
         return measured.count(nodeId) > 0;
     }
 
+    /// Whether `nodeId` currently holds a backend qubit (was activated and hasn't been measured/traced out yet).
     bool isActive(int nodeId) const {
         return activeNodes.count(nodeId) > 0;
     }
 
+    /// Whether `nodeId` was activated and has since been measured/deactivated.
     bool wasDeactivated(int nodeId) const {
         return deactivatedNodes.count(nodeId) > 0;
     }
 
+    /// Whether the CZ for graph edge `(u, v)` has already been applied on the backend.
     bool isEdgeActive(int u, int v) const {
         return activeEdges.find({u, v}) != activeEdges.end() || activeEdges.find({v, u}) != activeEdges.end();
     }
 
+    /// Allocates a fresh `|+>` backend qubit for `nodeId`, if it doesn't have one already (no-op if already active or already deactivated).
     void activateNode(int nodeId) {
         if (isActive(nodeId)) return;
         if (wasDeactivated(nodeId)) return;
@@ -455,6 +533,7 @@ public:
         activeNodes.insert(nodeId);
     }
 
+    /// Applies the CZ for graph edge `(u, v)` on the backend, if not already applied. Both `u` and `v` must already be active.
     void activateEdge(int u, int v) {
         if (isEdgeActive(u, v)) return;
         if (!isActive(u)) {
@@ -469,7 +548,7 @@ public:
         activeEdges.insert({u,v});
     }
 
-    // Activates ALL nodes and edges
+    /// Activates every vertex and edge in the graph up front (used when `conveyorBelt` is false), then canonicalizes qubit order (reorderQubitsCanonically()).
     void activateAll() {
         for (int r = 0; r < totalNodes; r++) {
             activateNode(r);
@@ -481,7 +560,7 @@ public:
         reorderQubitsCanonically();
     }
 
-    // Activates all necessary nodes based on the readyToMEasure
+    /// Activates every vertex currently in `readyToMeasure` and their neighbors/incident edges (streaming allocation, used when `conveyorBelt` is true — called after construction and after every step()), then canonicalizes qubit order.
     void activateAllNecessary() {
         for (int r : readyToMeasure) {
             activateNode(r);
@@ -493,6 +572,7 @@ public:
         reorderQubitsCanonically();
     }
 
+    /// (Re)initializes the backend with `numInputNodes` qubits, optionally setting a custom input state, and marks the graph's input vertices active.
     void initStatevector(std::string inputStateString = "") {
         backendSim.init(backendType, numInputNodes, randomMeasurements);
 
@@ -503,7 +583,7 @@ public:
 
         std::vector<int> inputs = graph.getInputs();
         std::sort(inputs.begin(), inputs.end(), std::greater<int>());
-        
+
         qubitToGraphNode.reserve(numInputNodes);
         for (int i : inputs) {
             qubitToGraphNode.insert(qubitToGraphNode.begin(), i);
@@ -511,8 +591,27 @@ public:
         }
     }
 
+    /**
+     * @brief Executes one measurement step: measures `nodeId` (or, if it's an
+     * output, writes out its accumulated OutputAdjustmentMap instead), then
+     * propagates Pauli corrections and recomputes readiness.
+     *
+     * On an unwanted ("1") outcome, applies an X correction to every vertex
+     * in `flow.corrf[nodeId]` and a Z correction to every vertex in the odd
+     * neighborhood of that set (rotateGraphNode()), following the strong
+     * uniform stepwise determinism result of <https://arxiv.org/abs/2410.23439> (p. 5). Then
+     * clears `nodeId` from every other vertex's pending dependencies,
+     * recomputes `readyToMeasure` (recomputeReadyToMeasure()), and — if
+     * `conveyorBelt` is set — activates whatever newly became necessary
+     * (activateAllNecessary()).
+     *
+     * @param nodeId The vertex to measure/finalize. Must be both ready
+     * (isReady()) and active (isActive()).
+     * @return `true` on success; `false` (with a diagnostic to stderr) if
+     * `nodeId` wasn't ready/active/present as expected.
+     */
     bool step(int nodeId) {
-        
+
         if (!isReady(nodeId)) {
             std::cerr << "Node " << nodeId << " is not ready to be measured.\n";
             return false;
@@ -544,7 +643,7 @@ public:
         measured.insert(nodeId);
         measurementOutcomes[nodeId] = outcome;
         readyToMeasure.erase(nodeId);
-        
+
 
         // Apply corrections following the strong uniform stepwise determinism
         // http://arxiv.org/abs/2410.23439 (An algebraic interpretation of PF) p. 5
@@ -580,6 +679,7 @@ public:
     }
 
 
+    /// Applies output vertex `outId`'s accumulated OutputAdjustmentMap to its backend qubit as real gates (OutputAdjustmentMap::toCircuit()), then resets the tracked adjustment back to standard.
     void writeOutAdjToStatevec(int outId) {
 
         if (!graph.isOutput(outId)) {
@@ -606,10 +706,7 @@ public:
         oa.reset();
     }
 
-    // Reorders the statevector qubits so that the node with the lowest
-    // graph node ID sits at bit 0 (rightmost in the bitstring) and the
-    // highest node ID sits at the most significant bit (leftmost).
-    // Called after every activation so this canonical order holds at all times.
+    /// Reorders the backend's qubits so that the node with the lowest graph node ID sits at bit 0 (rightmost in the bitstring) and the highest node ID sits at the most significant bit (leftmost). Called after every activation so this canonical order holds at all times; skipped (O(2^n) cost) once the statevector has grown past `maxVecSizeJSON`.
     void reorderQubitsCanonically() {
         int n = (int)qubitToGraphNode.size();
 
@@ -639,12 +736,14 @@ public:
     }
 
 
+    /// Applies every output vertex's accumulated OutputAdjustmentMap (writeOutAdjToStatevec()) in turn.
     void writeAllOutAdjToStatevec() {
         for (auto [id, _] : graph.getOutputAdjustments()) {
             writeOutAdjToStatevec(id);
         }
     }
 
+    /// Whether the simulation has finished: nothing left ready to measure, or every measurement vertex is measured and every output's adjustment is already standard.
     bool isComplete() const {
 
         if (readyToMeasure.size() == 0) return true;
@@ -661,6 +760,7 @@ public:
     }
 
 
+    /// Repeatedly step()s an arbitrary ready vertex until isComplete(). Stops early (with a diagnostic to stderr) if a step ever fails.
     void simulateAll() {
         while (!isComplete()) {
             bool succes = step(*readyToMeasure.begin());
@@ -671,15 +771,18 @@ public:
         }
     }
 
+    /// Runs simulateAll() and returns the final state as a bra-ket string.
     std::string runAndGetOutput() {
         simulateAll();
         return getStatevectorBraKet();
     }
 
+    /// The measurement outcome (0 or 1) recorded for each measured vertex so far.
     const std::unordered_map<int, int>& getOutcomes() const {
         return measurementOutcomes;
     }
-    
+
+    /// The set of correction types (`"X"`/`"Z"`) applied to each vertex so far.
     const std::unordered_map<int, std::set<std::string>>& getCorrections() const {
         return appliedCorrections;
     }

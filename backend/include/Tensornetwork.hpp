@@ -18,26 +18,32 @@ using json = nlohmann::json;
 #include "utils.hpp"
 #include "QuantumVector.hpp"
 
-// Tensor-network backend for MBQC simulation.
-//
-// Qubit indices ("positions") behave exactly like in StatevectorSimulator:
-// they are a contiguous compact numbering [0, num_qubits), where a freshly
-// added qubit takes position 0 and all others shift up by one, and tracing
-// a qubit out shifts everything above it down by one.
-//
-// Internally, every entangled cluster of qubits ("block") is stored as a
-// small Matrix Product State (MPS) chain rather than one dense amplitude
-// vector: a sequence of rank-3 site tensors, one per qubit in the block,
-// linked by "bond" indices whose dimension reflects how entangled the two
-// sides of that cut are. Unentangled qubits therefore cost O(1) (a
-// single 1x1-bonded site) and a CZ between two qubits only grows the bond
-// it actually touches - blocks with limited entanglement stay small no
-// matter how many qubits they contain, instead of every block being a
-// dense 2^numQubits vector. maxBondDim (chi) caps how large a bond is
-// allowed to grow via SVD truncation; chi = 0 means "no cap", i.e. every
-// bond is kept at its full (exact) Schmidt rank and the simulation stays
-// mathematically exact, just no longer forced through a dense vector.
-
+/**
+ * @brief Tensor-network backend for MBQC simulation.
+ *
+ * Qubit indices ("positions") behave exactly like in StatevectorSimulator:
+ * they are a contiguous compact numbering `[0, num_qubits)`, where a freshly
+ * added qubit takes position 0 and all others shift up by one, and tracing
+ * a qubit out shifts everything above it down by one.
+ *
+ * Internally, every entangled cluster of qubits ("block") is stored as a
+ * small Matrix Product State (MPS) chain rather than one dense amplitude
+ * vector: a sequence of rank-3 site tensors, one per qubit in the block,
+ * linked by "bond" indices whose dimension reflects how entangled the two
+ * sides of that cut are. Unentangled qubits therefore cost O(1) (a
+ * single 1x1-bonded site) and a CZ between two qubits only grows the bond
+ * it actually touches - blocks with limited entanglement stay small no
+ * matter how many qubits they contain, instead of every block being a
+ * dense `2^numQubits` vector. `maxBondDim` (chi) caps how large a bond is
+ * allowed to grow via SVD truncation; `chi = 0` means "no cap", i.e. every
+ * bond is kept at its full (exact) Schmidt rank and the simulation stays
+ * mathematically exact, just no longer forced through a dense vector.
+ *
+ * This is the more scalable of the two backends behind SimulatorBackendHandle
+ * (contrast with StatevectorSimulator, whose cost is exponential regardless
+ * of entanglement); Simulator picks between them based on the `maxVecSize`
+ * threshold passed at construction.
+ */
 class TensorNetworkSimulator {
 public:
     using cplx = std::complex<double>;
@@ -424,7 +430,18 @@ private:
     }
 
 public:
+    /// Constructs an empty (0-qubit) simulator with unbounded bond dimension.
     TensorNetworkSimulator() : TensorNetworkSimulator(0, true) {}
+    /**
+     * @brief Constructs a simulator with `n` qubits, each starting in its own
+     * unentangled `|0>` block.
+     * @param n Number of qubits (>= 0).
+     * @param random Whether measure()/measure_qubit_in_basis() sample outcomes
+     * randomly by Born-rule probability (`true`), or deterministically always
+     * return outcome 0 (`false`).
+     * @param maxBondDim Maximum MPS bond dimension (chi); `0` means unbounded/exact.
+     * @throws std::invalid_argument if `n < 0` or `maxBondDim < 0`.
+     */
     TensorNetworkSimulator(int n, bool random = true, int maxBondDim = 0)
         : randomMeasurements(random), rng(std::random_device{}()), maxBondDim(maxBondDim) {
         if (n < 0) throw std::invalid_argument("Number of qubits must be non-negative");
@@ -442,28 +459,35 @@ public:
         }
     }
 
+    /// The current number of qubits.
     int get_num_qubits() const { return (int)posToLoc.size(); }
 
+    /// The configured maximum bond dimension (chi); `0` means unbounded.
     int getMaxBondDim() const { return maxBondDim; }
+    /// Sets the maximum bond dimension for future two-qubit gates; does not retroactively re-truncate existing blocks.
     void setMaxBondDim(int chi) {
         if (chi < 0) throw std::invalid_argument("maxBondDim must be non-negative (0 = no truncation)");
         maxBondDim = chi;
     }
 
-    // Running estimate of |<psi_exact|psi_truncated>|^2 accumulated since
-    // construction/reset - see the fidelityEstimate member comment for
-    // exactly what "estimate" means here. Always exactly 1.0 when
-    // maxBondDim == 0.
+    /// Running estimate of `|<psi_exact|psi_truncated>|^2` accumulated since
+    /// construction/reset() - see the private `fidelityEstimate` member comment
+    /// for exactly what "estimate" means here. Always exactly 1.0 when `maxBondDim == 0`.
     double getFidelityEstimate() const { return fidelityEstimate; }
 
+    /// The full state as a dense amplitude vector (contracts every block — exponential cost; for external readout only, never on the simulation hot path).
     VectorC get_statevector() const { return contractAll(); }
 
-    // Returns, for each currently active tensor block, the sorted list of
-    // global qubit positions living in it. Blocks are ordered by the
-    // smallest position they contain. Two positions end up in the same
-    // block iff their qubits have become entangled (directly or
-    // transitively) via CZ - this is the actual unit of dense storage in
-    // this backend, so it's the right thing to visualize/inspect.
+    /**
+     * @brief Returns, for each currently active tensor block, the sorted list
+     * of global qubit positions living in it.
+     *
+     * Blocks are ordered by the smallest position they contain. Two
+     * positions end up in the same block iff their qubits have become
+     * entangled (directly or transitively) via CZ - this is the actual unit
+     * of dense storage in this backend, so it's the right thing to
+     * visualize/inspect.
+     */
     std::vector<std::vector<int>> getBlockStructure() const {
         std::unordered_map<int, std::vector<int>> byBlock;
         for (int pos = 0; pos < (int)posToLoc.size(); ++pos) {
@@ -481,23 +505,26 @@ public:
         return result;
     }
 
-    // Which block a given global qubit position currently lives in - the
-    // id to pass to getSingularValueSpectrum below.
+    /// Which block a given global qubit position currently lives in - the id to pass to getSingularValueSpectrum().
     int getBlockId(int qubit) const {
         if (qubit < 0 || qubit >= (int)posToLoc.size())
             throw std::out_of_range("getBlockId: qubit index out of range");
         return posToLoc[qubit].blockId;
     }
 
-    // Diagnostic only: the Schmidt singular-value spectrum across every
-    // internal cut of the given block's MPS chain (cut i separates chain
-    // positions [0..i] from [i+1..end), so a block of nb qubits has nb-1
-    // cuts), sorted descending within each cut - exactly the values an
-    // SVD-truncated MPS would have to compress at that bond. Computed by
-    // contracting the block to a dense vector and reshaping around each
-    // cut, so it is exponential in the block's qubit count; only meant
-    // for small/medium blocks (e.g. via getBlockStructure), never on the
-    // hot simulation path.
+    /**
+     * @brief Diagnostic only: the Schmidt singular-value spectrum across
+     * every internal cut of the given block's MPS chain (cut i separates
+     * chain positions `[0..i]` from `[i+1..end)`, so a block of `nb` qubits
+     * has `nb-1` cuts), sorted descending within each cut - exactly the
+     * values an SVD-truncated MPS would have to compress at that bond.
+     *
+     * Computed by contracting the block to a dense vector and reshaping
+     * around each cut, so it is exponential in the block's qubit count; only
+     * meant for small/medium blocks (e.g. via getBlockStructure()), never on
+     * the hot simulation path.
+     * @throws std::out_of_range if `blockId` doesn't name an active block.
+     */
     std::vector<std::vector<double>> getSingularValueSpectrum(int blockId) const {
         auto it = blocks.find(blockId);
         if (it == blocks.end()) throw std::out_of_range("getSingularValueSpectrum: no such block");
@@ -523,12 +550,15 @@ public:
         return spectra;
     }
 
-    // Total number of amplitudes actually stored across all blocks, i.e.
-    // the sum over every MPS site tensor of 2 * leftDim * rightDim - the
-    // real memory footprint of this backend, as opposed to the
-    // 2^numQubits a dense statevector would need. Reflects how well the
-    // MPS chains are compressing the state (which shrinks as maxBondDim
-    // shrinks, at the cost of approximation).
+    /**
+     * @brief Total number of amplitudes actually stored across all blocks,
+     * i.e. the sum over every MPS site tensor of `2 * leftDim * rightDim` -
+     * the real memory footprint of this backend, as opposed to the
+     * `2^numQubits` a dense statevector would need.
+     *
+     * Reflects how well the MPS chains are compressing the state (which
+     * shrinks as `maxBondDim` shrinks, at the cost of approximation).
+     */
     long long getStoredAmplitudeCount() const {
         long long total = 0;
         for (const auto& [id, block] : blocks)
@@ -537,6 +567,7 @@ public:
         return total;
     }
 
+    /// Resets every qubit back to its own unentangled `|0>` block (qubit count unchanged) and resets the fidelity estimate to 1.0.
     void reset() {
         int n = (int)posToLoc.size();
         blocks.clear();
@@ -552,20 +583,28 @@ public:
         fidelityEstimate = 1.0;
     }
 
+    /// The current state as a bra-ket string (contracts every block; see vectorToBraKet()).
     std::string getStatevectorBraKet() const {
         return vectorToBraKet(contractAll());
     }
 
+    /// The current state as a JSON array of `[real, imag]` pairs (contracts every block; see vectorToJson()).
     json toJson() const {
         return vectorToJson(contractAll());
     }
 
+    /// Parses a bra-ket string into an amplitude vector (see parseBraKetVector()).
     static VectorC parseBraKet(const std::string& braket) {
         return parseBraKetVector(braket);
     }
 
-    // Like StatevectorSimulator, only valid right after construction while
-    // all qubits still form a single fresh |00...0> block.
+    /**
+     * @brief Overwrites the entire state with `state`, like
+     * StatevectorSimulator::setState() — only valid right after construction
+     * while all qubits still form the fresh `|00...0>` state.
+     * @throws std::invalid_argument if `state`'s size isn't `2^num_qubits`.
+     * @throws std::runtime_error if the simulator isn't currently in the reset state.
+     */
     void setState(const VectorC& state) {
         int n = (int)posToLoc.size();
         int expected_state_size = 1 << n;
@@ -586,6 +625,14 @@ public:
         block.sites = denseToBlock(state, n, maxBondDim, &fidelityEstimate).sites;
     }
 
+    /**
+     * @brief Overwrites just the given subsystem's amplitudes, like
+     * StatevectorSimulator::setStateSubsystem() — only valid right after
+     * construction while all qubits still form the fresh `|00...0>` state.
+     * @throws std::invalid_argument if `qubits` is empty, `state`'s size doesn't match, or `qubits` has duplicates.
+     * @throws std::runtime_error if the simulator isn't currently in the reset state.
+     * @throws std::out_of_range if there are no qubits, or a qubit index is out of range.
+     */
     void setStateSubsystem(const std::vector<int>& qubits, const VectorC& state) {
         if (qubits.empty()) throw std::invalid_argument("Qubit list cannot be empty");
         int subregister_size = static_cast<int>(qubits.size());
@@ -620,7 +667,7 @@ public:
         block.sites = denseToBlock(full, n, maxBondDim, &fidelityEstimate).sites;
     }
 
-    // New qubit takes position 0; every previously active qubit's position shifts up by one
+    /// Appends a new qubit in the `|+>` state as its own fresh block. New qubit takes position 0; every previously active qubit's position shifts up by one. Returns the new qubit's (0) position.
     int add_qubit_plus() {
         Block b;
         const double inv_sqrt2 = 1.0 / std::sqrt(2.0);
@@ -633,10 +680,14 @@ public:
         return retIndex;
     }
 
-    // permutation[new_qubit_index] = old_qubit_index. Blocks themselves are
-    // never touched - only the bookkeeping of which global position points
-    // at which block/local-bit changes, so this is O(n) instead of the
-    // O(2^n) a dense statevector needs for the same operation.
+    /**
+     * @brief Reorders qubits according to a permutation.
+     * @param permutation `permutation[new_qubit_index] = old_qubit_index`.
+     * Blocks themselves are never touched - only the bookkeeping of which
+     * global position points at which block/local-bit changes, so this is
+     * O(n) instead of the O(2^n) a dense statevector needs for the same operation.
+     * @throws std::invalid_argument if `permutation.size() != num_qubits`.
+     */
     void reorderQubits(const std::vector<int>& permutation) {
         int n = (int)posToLoc.size();
         if ((int)permutation.size() != n)
@@ -649,42 +700,50 @@ public:
     }
 
     // ============== GATES ==============
+
+    /// Applies an arbitrary 2x2 unitary `gate` to `qubit`'s site tensor in place (no bond growth — single-qubit gates never entangle).
     void apply_single_qubit_gate(int qubit, const Matrix2C& gate) {
         if (qubit < 0 || qubit >= (int)posToLoc.size()) throw std::out_of_range("TensorNetwork SingleQgate: Qubit index out of range");
         Loc loc = posToLoc[qubit];
         applySingleSiteGate(blocks.at(loc.blockId).sites[loc.localBit], gate);
     }
 
+    /// Applies the Pauli-X gate to `qubit`.
     void X(int qubit) {
         Matrix2C g; g << 0.0, 1.0,
                          1.0, 0.0;
         apply_single_qubit_gate(qubit, g);
     }
 
+    /// Applies the Pauli-Y gate to `qubit`.
     void Y(int qubit) {
         Matrix2C g; g << 0.0, cplx(0,-1),
                          cplx(0,1), 0.0;
         apply_single_qubit_gate(qubit, g);
     }
 
+    /// Applies the Pauli-Z gate to `qubit`.
     void Z(int qubit) {
         Matrix2C g; g << 1.0, 0.0,
                          0.0, -1.0;
         apply_single_qubit_gate(qubit, g);
     }
 
+    /// Applies the S (phase, `diag(1, i)`) gate to `qubit`.
     void S(int qubit) {
         Matrix2C g; g << 1.0, 0.0,
                          0.0, cplx(0,1);
         apply_single_qubit_gate(qubit, g);
     }
 
+    /// Applies the S† (`diag(1, -i)`) gate to `qubit`.
     void Sdg(int qubit) {
         Matrix2C g; g << 1.0, 0.0,
                          0.0, cplx(0,-1);
         apply_single_qubit_gate(qubit, g);
     }
 
+    /// Applies the Hadamard gate to `qubit`.
     void H(int qubit) {
         double s = 1.0 / std::sqrt(2.0);
         Matrix2C g; g << s, s,
@@ -692,6 +751,17 @@ public:
         apply_single_qubit_gate(qubit, g);
     }
 
+    /**
+     * @brief Applies a controlled-Z gate between `control` and `target`.
+     *
+     * Merges their blocks if needed (ensureSameBlock()), then — since the two
+     * qubits need not be adjacent in the MPS chain, nor even in the same
+     * block before the merge — walks a swap network (applyTwoSiteGate() with
+     * swapGate()) to bring them next to each other before finally applying
+     * the CZ tensor itself, growing that one bond by at most `maxBondDim`.
+     * @throws std::out_of_range if either qubit index is out of range.
+     * @throws std::invalid_argument if `control == target`.
+     */
     void CZ(int control, int target) {
         int n = (int)posToLoc.size();
         if (control < 0 || control >= n || target < 0 || target >= n) throw std::out_of_range("TensorNetwork CZ: Qubit index out of range");
@@ -754,6 +824,19 @@ public:
         return p0;
     }
 
+    /**
+     * @brief Measures `qubit` in the computational (Z) basis, via
+     * environment-contraction probability (computeP0()) rather than a dense
+     * state — same semantics as StatevectorSimulator::measure().
+     * @param trace_out If true (and more than one qubit remains), the
+     * measured qubit's site is removed from its block entirely, absorbing
+     * its bond matrix into the neighboring site (dense-vector's `remove_bit`
+     * equivalent for an MPS chain); the block is dropped altogether if it
+     * only contained this one qubit.
+     * @return The measurement outcome (0 or 1).
+     * @throws std::out_of_range if `qubit` is out of range.
+     * @throws std::runtime_error if the outcome's probability is ~0.
+     */
     int measure(int qubit, bool trace_out = false) {
         int n = (int)posToLoc.size();
         if (qubit < 0 || qubit >= n) throw std::out_of_range("Measure: qubit index out of range");
@@ -810,6 +893,7 @@ public:
         return outcome;
     }
 
+    /// Measures `qubit` in an MBQC measurement basis/angle. Same semantics as StatevectorSimulator::measure_qubit_in_basis().
     int measure_qubit_in_basis(int qubit, MeasurementBasis basis, double alpha) {
         cplx psi0[2], psi1[2];
         switch (basis) {
@@ -849,6 +933,7 @@ public:
         return measure_in_basis_vectors(qubit, psi0, psi1);
     }
 
+    /// Measures `qubit` in the basis defined by orthonormal eigenvectors `psi0`/`psi1`. Same semantics as StatevectorSimulator::measure_in_basis_vectors().
     int measure_in_basis_vectors(int qubit, cplx psi0[2], cplx psi1[2]) {
         Matrix2C U;
         U(0,0) = psi0[0];
@@ -864,10 +949,13 @@ public:
     }
 
     // ============== EQUALITY ==============
+
+    /// Whether two (dense) amplitude vectors are equal within `tolerance` (see vectorsEqual()).
     static bool isEqual(const VectorC& a, const VectorC& b, double tolerance = TOLERANCE) {
         return vectorsEqual(a, b, tolerance);
     }
 
+    /// Whether two (dense) amplitude vectors are equal up to a global phase (see vectorsEqualUpToGlobalPhase()).
     static bool isEqualUpToGlobalPhase(const VectorC& a, const VectorC& b, double tolerance = TOLERANCE) {
         return vectorsEqualUpToGlobalPhase(a, b, tolerance);
     }

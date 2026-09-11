@@ -22,17 +22,21 @@ using json = nlohmann::json;
 // have such a vector in hand - everything about *how* that vector is built
 // and updated stays backend-specific.
 
+/// A dense complex amplitude vector (one entry per computational basis state), as used by both simulator backends.
 using QVecC = Eigen::VectorXcd;
 
+/// Extracts bit `position` of `number` (0 = least significant).
 inline int get_bit(int number, int position) {
     return (number >> position) & 1;
 }
 
+/// Returns `number` with bit `position` set to `value` (0 or 1).
 inline int set_bit(int number, int position, int value) {
     if (value) return number | (1 << position);
     return number & ~(1 << position);
 }
 
+/// Removes bit `pos` from `idx`, shifting all higher bits down by one (the inverse of inserting a bit at that position). Used when a qubit is traced out of a statevector.
 inline int remove_bit(int idx, int pos) {
     int lower_mask = (1 << pos) - 1;
     int upper_mask = ~((1 << (pos + 1)) - 1);
@@ -41,6 +45,7 @@ inline int remove_bit(int idx, int pos) {
     return lower | upper;
 }
 
+/// Parses a single complex-number term like `"0.707107"`, `"0.707107i"`, or `"1 + 2i"` (as produced within a bra-ket string) into a `std::complex<double>`.
 inline std::complex<double> parseComplex(const std::string& s) {
     double real = 0.0, imag = 0.0;
     std::string trimmed = s;
@@ -79,9 +84,16 @@ inline std::complex<double> parseComplex(const std::string& s) {
     return std::complex<double>(real, imag);
 }
 
-// Parses strings like "(0.707107)|00> + (0.707107i)|11>" into a dense
-// amplitude vector. Named distinctly from the per-class `parseBraKet`
-// static wrappers so those can forward to this without recursing.
+/**
+ * @brief Parses a full bra-ket string, e.g.
+ * `"(0.707107)|00> + (0.707107i)|11>"`, into a dense amplitude vector.
+ *
+ * The number of qubits is inferred from the widest ket string seen. Named
+ * distinctly from the per-class `parseBraKet` static wrappers
+ * (StatevectorSimulator::parseBraKet(), TensorNetworkSimulator::parseBraKet())
+ * so those can forward to this without recursing.
+ * @return The parsed amplitude vector, or an empty vector if no valid terms were found.
+ */
 inline QVecC parseBraKetVector(const std::string& braket) {
     std::vector<std::pair<std::complex<double>, size_t>> terms;
     size_t num_qubits_local = 0;
@@ -120,6 +132,7 @@ inline QVecC parseBraKetVector(const std::string& braket) {
     return result;
 }
 
+/// Formats a dense amplitude vector as a bra-ket string, e.g. `"(0.707107)|00> + (0.707107i)|11>"`, omitting terms with (near-)zero amplitude. Inverse of parseBraKetVector().
 inline std::string vectorToBraKet(const QVecC& statevector) {
     auto fmt = [](std::complex<double> c) {
         std::ostringstream out;
@@ -164,6 +177,7 @@ inline std::string vectorToBraKet(const QVecC& statevector) {
     return out.str();
 }
 
+/// Serializes an amplitude vector to a JSON array of `[real, imag]` pairs, one per basis state.
 inline json vectorToJson(const QVecC& statevector) {
     json j = json::array();
     for (int i = 0; i < statevector.size(); ++i) {
@@ -173,6 +187,7 @@ inline json vectorToJson(const QVecC& statevector) {
     return j;
 }
 
+/// Whether two amplitude vectors are equal entrywise within `tolerance` (same size required).
 inline bool vectorsEqual(const QVecC& a, const QVecC& b, double tolerance = TOLERANCE) {
     if (a.size() != b.size()) return false;
     for (int i = 0; i < a.size(); ++i) {
@@ -182,6 +197,7 @@ inline bool vectorsEqual(const QVecC& a, const QVecC& b, double tolerance = TOLE
     return true;
 }
 
+/// Whether two amplitude vectors are equal up to a global phase factor: finds the phase from the first pair of amplitudes both above `tolerance`, then checks every other entry against it.
 inline bool vectorsEqualUpToGlobalPhase(const QVecC& a, const QVecC& b, double tolerance = TOLERANCE) {
     if (a.size() != b.size()) return false;
 

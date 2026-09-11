@@ -5,33 +5,40 @@
 #include "MBQC_Graph.hpp"
 #include <stdexcept>
 
-//  Translates a QuantumCircuit into an MBQC_Graph
-//  following the method of Broadbent & Kashefi (arXiv:quant-ph/0704.1736)
-//
-//  Gate → pattern rewrites:
-//
-//    J(α) on qubit q
-//      - The current output node for qubit q is assigned measurement XY(-α).
-//      - A fresh node is added and becomes the new output for qubit q.
-//      - An edge is added between the old output and the fresh node.
-//
-//    CZ on qubits q0, q1
-//      - An edge is added between the current output nodes of q0 and q1.
-//      (Both nodes remain outputs; their measurement basis is set later.)
-//
-//  After all gates are processed the live output nodes become the pattern
-//  outputs.
-//
-//  Identity padding:
-//  The MBQC_Graph convention requires inputs ∩ outputs = ∅.  If after
-//  building the raw pattern any qubit's input node is still also its output
-//  (i.e. no J gate was ever applied to it), an identity pattern
-//
-//       [input/square] --XY(0)-- [new output/circle]
-//
-//  is inserted to separate them.
-//
-//  If planarOnly == true, all X measurements are converted to XY
+/**
+ * @brief Translates a QuantumCircuit into an equivalent MBQC_Graph, following
+ * the method of Broadbent & Kashefi (<https://arxiv.org/abs/0704.1736>).
+ *
+ * `circ` is first reduced to the `{J(α), CZ}` gate set via
+ * QuantumCircuit::transpile(), then translated gate by gate:
+ *
+ *   - **J(α) on qubit q**: the current output node for qubit q is assigned
+ *     measurement `XY(-α)`. A fresh node is added and becomes the new output
+ *     for qubit q, connected to the old output by an edge.
+ *   - **CZ on qubits q0, q1**: an edge is added between the current output
+ *     nodes of q0 and q1 (both remain outputs; their measurement basis is set
+ *     later, by a subsequent J).
+ *
+ * After all gates are processed, the live output nodes become the pattern's
+ * outputs.
+ *
+ * **Identity padding**: the MBQC_Graph convention requires
+ * `inputs ∩ outputs = ∅`. If, after building the raw pattern, a qubit's input
+ * node is still also its output (no J gate was ever applied to it), an
+ * identity pattern `[input/square] --XY(0)-- [new output/circle]` is
+ * inserted to separate them.
+ *
+ * @param circ The circuit to translate.
+ * @param planarOnly If true, every `X`-basis measurement produced by identity
+ * padding is relabeled into the `XY` plane (relabelPlanar()) instead of kept
+ * as `X`.
+ * @return The equivalent MBQC_Graph.
+ * @throws std::invalid_argument if `circ.transpile()` leaves a gate that
+ * isn't `J` or `CZ` (should not happen for any circuit built from supported
+ * gates).
+ * @throws std::runtime_error if internal bookkeeping ever assigns a
+ * non-output node the `OUTPUT` basis (should not happen).
+ */
 inline MBQC_Graph CIRCtoMBQCGraph(QuantumCircuit circ, bool planarOnly = true) {
     
     QuantumCircuit tc = circ.transpile();

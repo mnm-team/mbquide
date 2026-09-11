@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+/// A single gate application: its name, the qubit(s)/classical bit(s) it acts on, and any numeric parameters (e.g. rotation angles).
 struct Gate {
     std::string        name;
     std::vector<int>   qubits;
@@ -15,6 +16,15 @@ struct Gate {
 };
 
 
+/**
+ * @brief A plain gate-list quantum circuit: a qubit/classical-bit count plus
+ * an ordered sequence of Gate applications.
+ *
+ * Built up either directly via the named gate methods below (h(), cx(), ...)
+ * or by QASMParser::parse(). transpile() reduces any such circuit down to
+ * the `{J(α), CZ}` gate set that Circ2MBQC.hpp's CIRCtoMBQCGraph() consumes
+ * to build an MBQC pattern.
+ */
 class QuantumCircuit {
 public:
     int              num_qubits = 0;
@@ -25,6 +35,7 @@ public:
 
     QuantumCircuit(int nq, int nc = 0) : num_qubits(nq), num_clbits(nc) {}
 
+    /// Appends a gate application to the circuit.
     void addGate(const std::string&      name,
                  const std::vector<int>& qubits,
                  const std::vector<int>& clbits  = {},
@@ -55,9 +66,10 @@ public:
 
     void ccx(int c0, int c1, int t) { addGate("CCX", {c0, c1, t}); }
     void ccz(int c0, int c1, int t) { addGate("CCZ", {c0, c1, t}); }
-    
+
     void measure(int q, int c)    { addGate("Measure", {q}, {c}); }
 
+    /// Prints a human-readable listing of every gate in the circuit to stdout.
     void printCircuit() const {
         std::cout << "Quantum Circuit: " << num_qubits << " qubits, "
                   << num_clbits << " classical bits, "
@@ -74,12 +86,17 @@ public:
         }
     }
 
-    // Transpile to { J(α), CZ }
-    //
-    //  Returns a new QuantumCircuit in which every gate has been replaced by
-    //  an equivalent sequence of J(α) and CZ gates.
-    //  Throws std::invalid_argument for unrecognised gate names.
-    //  Reference: Zilk et al., "A Compiler for Universal Photonic Quantum Computers", IEEE QCE 2022.  arXiv:2210.09251
+    /**
+     * @brief Returns a new QuantumCircuit in which every gate has been
+     * replaced by an equivalent sequence of `J(α)` (a generalized-Hadamard/
+     * "measure at angle α and correct" rotation gate) and `CZ` gates — the
+     * gate set MBQC patterns are naturally built from.
+     *
+     * Reference: Zilk et al., "A Compiler for Universal Photonic Quantum
+     * Computers", IEEE QCE 2022 (<https://arxiv.org/abs/2210.09251>). See the private
+     * `d`-prefixed static helpers below for the per-gate decomposition.
+     * @throws std::invalid_argument for unrecognized gate names.
+     */
     QuantumCircuit transpile() const {
         QuantumCircuit out(num_qubits, num_clbits);
         for (const auto& g : gates)
@@ -218,6 +235,10 @@ private:
     }
 
 
+    // Dispatches a single gate to its `d`-prefixed decomposition helper
+    // above by (case-folded) name, appending the resulting J/CZ gates to
+    // `out`. `MEASURE` passes through unchanged (transpile() doesn't touch
+    // measurements); any other unrecognized name throws.
     static void transpileGate(QuantumCircuit& out, const Gate& g) {
         // Case-fold name for matching
         std::string n = g.name;

@@ -1,0 +1,7 @@
+# Generated Doxygen XML (input to Breathe) and Sphinx build output.
+doxygen/
+_build/
+
+# Local virtualenvs some contributors may create alongside docs/.
+.venv/
+venv/

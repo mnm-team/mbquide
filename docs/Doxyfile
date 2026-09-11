@@ -1,0 +1,72 @@
+# Doxyfile for the MBQuIDE C++ backend.
+#
+# This file is intentionally minimal — only settings that differ from the
+# Doxygen defaults are listed. Run it from inside the docs/ directory:
+#
+#     cd docs && doxygen Doxyfile
+#
+# It produces XML output consumed by Breathe/Sphinx (docs/doxygen/xml) and
+# is *not* meant to be committed output — see docs/.gitignore.
+
+#---------------------------------------------------------------------------
+# Project
+#---------------------------------------------------------------------------
+
+PROJECT_NAME           = "MBQuIDE Backend"
+PROJECT_BRIEF           = "C++ REST API backend for the MBQuIDE measurement-based quantum computing editor"
+OUTPUT_LANGUAGE         = English
+
+#---------------------------------------------------------------------------
+# Input
+#---------------------------------------------------------------------------
+
+# Paths are relative to the directory this Doxyfile lives in (docs/).
+INPUT                   = ../backend/include \
+                           ../backend/src
+RECURSIVE                = YES
+FILE_PATTERNS            = *.hpp *.h *.cpp *.cc
+EXCLUDE_PATTERNS         = */build/* */test/*
+
+# The backend headers currently have few Doxygen-style comments. Extracting
+# undocumented entities still gives Breathe something to render (signatures,
+# members, inheritance) instead of silently skipping them.
+EXTRACT_ALL              = YES
+EXTRACT_PRIVATE          = NO
+EXTRACT_STATIC           = YES
+EXTRACT_LOCAL_CLASSES    = YES
+
+QUIET                    = YES
+WARN_IF_UNDOCUMENTED     = NO
+WARN_IF_DOC_ERROR        = YES
+WARN_NO_PARAMDOC         = NO
+
+#---------------------------------------------------------------------------
+# Output
+#---------------------------------------------------------------------------
+
+OUTPUT_DIRECTORY         = doxygen
+
+# HTML/LaTeX are disabled: Sphinx (via Breathe) renders the docs site, and
+# Doxygen here only needs to produce the XML index that Breathe reads.
+GENERATE_HTML            = NO
+GENERATE_LATEX           = NO
+GENERATE_XML             = YES
+XML_OUTPUT               = xml
+XML_PROGRAMLISTING       = YES
+
+#---------------------------------------------------------------------------
+# Preprocessing
+#---------------------------------------------------------------------------
+
+ENABLE_PREPROCESSING     = YES
+MACRO_EXPANSION          = YES
+EXPAND_ONLY_PREDEF       = YES
+SKIP_FUNCTION_MACROS     = YES
+
+#---------------------------------------------------------------------------
+# Misc
+#---------------------------------------------------------------------------
+
+GENERATE_TODOLIST        = YES
+GENERATE_BUGLIST         = YES
+SOURCE_BROWSER           = YES
