@@ -51,7 +51,6 @@ export type GraphProps = {
   onNodeDragEnd?: (nodes: NodeType[]) => void;
   onNodeDelete?: (nodes?: NodeType[]) => void;
   onCreateNewEdge?: (edge?: Edge) => void;
-  runLocalComplementation?: () => void;
   runRelabelingPlanar?: (basis: string | undefined) => void;
   runRelabeling?: () => void;
   onPhaseSubmit?: (node?: NodeType, angle?: number) => void;

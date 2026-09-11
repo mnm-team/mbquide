@@ -19,6 +19,10 @@ export const UNFUSION_TOOLTIP_FONT_SIZE = 14; // px
 
 // Pill height for a given font size (padding above/below plus a little breathing room), so SVG
 // callers can size their background rect to match whatever font size they render at.
+// Co-located with the constants above and the `Tooltip` component below on purpose (see the
+// file-top comment: this is the single source of truth shared with the SVG-rendered tooltip);
+// the only cost is slightly less smooth Fast Refresh on edits here, not a correctness issue.
+// eslint-disable-next-line react-refresh/only-export-components
 export const getTooltipHeight = (fontSize: number) => fontSize + TOOLTIP_PADDING_Y * 2 + 4;
 
 type TooltipProps = {

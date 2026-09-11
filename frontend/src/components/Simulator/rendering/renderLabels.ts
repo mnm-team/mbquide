@@ -23,7 +23,7 @@ export const renderBasisLabelsWithOutcomes = (
     .attr("dy", "5px")
     .text((d) => {
       // Check if this node has a measurement outcome
-      const match = outcomes.find(([id, _]) => id === d.id);
+      const match = outcomes.find(([id]) => id === d.id);
       if (match) {
         return match[1].toString();
       }

@@ -185,11 +185,6 @@ export default function MBQC_App() {
     };
   }, [handleUndo, handleRedo]);
 
-  const handlePrintNodes = useCallback(() => {
-    console.log('Selected Nodes:', selectedNodes);
-    setSelectedNodes([]);
-  }, [selectedNodes, setSelectedNodes]);
-
   const handleLocalComplementation = useCallback(() => {
     if (selectedNodes.length !== 1) return;
     runGraphOperation(createLocalComplementationOperation(selectedNodes[0].id));
@@ -325,10 +320,6 @@ export default function MBQC_App() {
       const flow = data.flow;
 
       if (flow?.ok) {
-        console.log('The graph has pauli flow!');
-        console.log(`\tCorrf: ${JSON.stringify(flow.corrf)}`);
-        console.log(`\tOdd neigbors corrf: ${JSON.stringify(flow.oddNcorrf)}`);
-        console.log(`\tDepths: ${JSON.stringify(flow.depths)}`);
         // Preserve the pre-flow layout so undo can remove the flow again.
         saveCurrentStateToHistory();
         orderNodesByFlow(flow.depths, flow.corrf, flow.oddNcorrf);
@@ -365,7 +356,6 @@ export default function MBQC_App() {
         saveCurrentStateToHistory();
         orderNodesByFlow(flow.depths, flow.corrf, flow.oddNcorrf);
       } else {
-        console.log('The graph has no flow after focus operation!');
         setFlowFocusable(false);
       }
     } catch (error) {
@@ -600,7 +590,6 @@ export default function MBQC_App() {
           outputs={outputs}
           outputAdjustments={adjustments}
           onSelectionChange={setSelectedNodes}
-          runLocalComplementation={handleLocalComplementation}
           runRelabeling={handleRelabeling}
           runRelabelingPlanar={handleRelabelingPlanar}
           onNodeDrop={handleNodeDrop}

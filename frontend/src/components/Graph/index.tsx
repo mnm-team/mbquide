@@ -16,7 +16,6 @@ export function MBQC_Graph({
   inputs,
   outputs,
   outputAdjustments = {},
-  runLocalComplementation,
   runRelabeling,
   runRelabelingPlanar,
   onNodeDrop,
@@ -151,12 +150,6 @@ export function MBQC_Graph({
 
   
   // Context menu handlers
-  const handleLocalComplementation = () => {
-    if (!runLocalComplementation) return;
-    runLocalComplementation();
-    setContextMenu({ ...contextMenu, visible: false });
-  };
-
   const handleRelabeling = () => {
     if (!runRelabeling) return;
     runRelabeling();

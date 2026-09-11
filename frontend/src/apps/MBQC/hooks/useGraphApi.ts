@@ -141,7 +141,7 @@ export const useGraphApi = ({
   }, [nodes, setNodes, setEdges, setInputs, setOutputs, setAdjustments]);
 
   const runGraphOperation = useCallback(async (
-    operationParams: Record<string, any>,
+    operationParams: Record<string, unknown>,
     graphOptions: UpdateGraphOptions = {},
   ) => {
     saveToHistory();

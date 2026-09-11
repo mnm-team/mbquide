@@ -8,7 +8,7 @@ import {
 } from "../apps/MBQC/api/operations";
 
 import { ActionButton, ExampleButton } from "./Buttons";
-import { ZXIcon, MBQCIcon, MeasurementIcon } from "./Icons";
+import { MBQCIcon, MeasurementIcon } from "./Icons";
 import LoadingOverlay from "./LoadingOverlay";
 
 type Props = {
@@ -21,30 +21,13 @@ export function QASMControls({ qasmInput, setQasmInput }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const toZX = useCallback(async () => {
-    if (!qasmInput.trim()) {
-      alert("Please enter some QASM before submitting.");
-      return;
-    }
-    try {
-      setLoading(true);
-      setError(null);
-      await executeAPIOperation("qasm", { qasm: qasmInput });
-      navigate("/ZX");
-    } catch (err: any) {
-      setError("Failed to generate ZX diagram.");
-    } finally {
-      setLoading(false);
-    }
-  }, [qasmInput, navigate]);
-
   const toMBQC = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       await executeAPIOperation("qasm", { qasm: qasmInput });
       navigate("/MBQC");
-    } catch (err: any) {
+    } catch {
       setError("Failed to generate MBQC diagram.");
     } finally {
       setLoading(false);
@@ -60,19 +43,14 @@ export function QASMControls({ qasmInput, setQasmInput }: Props) {
       await executeAPIOperation("graph", createGetFlowOperation());
       await executeAPIOperation("graph", createSimulateOperation());
       navigate("/SIM");
-    } catch (err: any) {
+    } catch {
       setError("Simulation failed.");
     } finally {
       setLoading(false);
     }
   }, [qasmInput, navigate]);
 
-  const bellQasm = `OPENQASM 2.0;\nqreg q[2];\n\nh q[0];\ncx q[0],q[1];`;
-  const hQasm = `OPENQASM 2.0;\nqreg q[1];\n\nh q[0];`;
   const toffoliQasm = `OPENQASM 2.0;\nqreg q[3];\n\nx q[0];\nx q[1];\nh q[2];\ncx q[1],q[2];\nrz(-pi/4) q[2];\ncx q[0],q[2];\nrz(pi/4) q[2];\ncx q[1],q[2];\nrz(-pi/4) q[1];\nrz(-pi/4) q[2];\ncx q[0],q[2];\ncx q[0],q[1];\nrz(-pi/4) q[1];\ncx q[0],q[1];\nrz(pi/4) q[0];\nrz(pi/4) q[2];\nh q[2];`;
-  const DeJoQasm = `OPENQASM 2.0;\nqreg q[3];\n\nx q[2];\nh q[0];\nh q[1];\nh q[2];\n// Balanced oracle example: f(x0,x1)=x0 XOR x1\ncx q[0], q[2];\ncx q[1], q[2];\nh q[0];\nh q[1];`;
-  const tof3 = `OPENQASM 2.0;\nqreg q[5];\n\nh q[4];\nh q[4];\nccx q[0],q[1],q[4];\nh q[4];\nh q[4];\nh q[3];\nh q[3];\nccx q[2],q[4],q[3];\nh q[3];\nh q[3];\nh q[4];\nh q[4];\nccx q[0],q[1],q[4];\nh q[4];\nh q[4];`;
-  const mod5_4 = `OPENQASM 2.0;\n\nqreg q[5];\n\nx q[4];\nh q[4];\nh q[4];\nccx q[0],q[3],q[4];\nh q[4];\nh q[4];\nccx q[2],q[3],q[4];\nh q[4];\nh q[4];\ncx q[3],q[4];\nh q[4];\nh q[4];\nccx q[1],q[2],q[4];\nh q[4];\nh q[4];\ncx q[2],q[4];\nh q[4];\nh q[4];\nccx q[0],q[1],q[4];\nh q[4];\nh q[4];\ncx q[1],q[4];\ncx q[0],q[4];`;
   const variational_4 = `OPENQASM 2.0;\nqreg q[4];\n\nx q[0];\nx q[1];\n\n// Gate: PhasedISWAP**0.9951774602384953\nrz(pi*0.25) q[1];\nrz(pi*-0.25) q[2];\ncx q[1],q[2];\nh q[1];\ncx q[2],q[1];\nrz(pi*0.4975887301) q[1];\ncx q[2],q[1];\nrz(pi*-0.4975887301) q[1];\nh q[1];\ncx q[1],q[2];\nrz(pi*-0.25) q[1];\nrz(pi*0.25) q[2];\n\nrz(0) q[2];\n\n// Gate: PhasedISWAP**-0.5024296754026449\nrz(pi*0.25) q[0];\nrz(pi*-0.25) q[1];\ncx q[0],q[1];\nh q[0];\ncx q[1],q[0];\nrz(pi*-0.2512148377) q[0];\ncx q[1],q[0];\nrz(pi*0.2512148377) q[0];\nh q[0];\ncx q[0],q[1];\nrz(pi*-0.25) q[0];\nrz(pi*0.25) q[1];\n\nrz(0) q[1];\n\n// Gate: PhasedISWAP**-0.49760685888033646\nrz(pi*0.25) q[2];\nrz(pi*-0.25) q[3];\ncx q[2],q[3];\nh q[2];\ncx q[3],q[2];\nrz(pi*-0.2488034294) q[2];\ncx q[3],q[2];\nrz(pi*0.2488034294) q[2];\nh q[2];\ncx q[2],q[3];\nrz(pi*-0.25) q[2];\nrz(pi*0.25) q[3];\n\nrz(0) q[3];\n\n// Gate: PhasedISWAP**0.004822678143889672\nrz(pi*0.25) q[1];\nrz(pi*-0.25) q[2];\ncx q[1],q[2];\nh q[1];\ncx q[2],q[1];\nrz(pi*0.0024113391) q[1];\ncx q[2],q[1];\nrz(pi*-0.0024113391) q[1];\nh q[1];\ncx q[1],q[2];\nrz(pi*-0.25) q[1];\nrz(pi*0.25) q[2];\n\nrz(0) q[2];`;
   const singleUnitary = `OPENQASM 2.0;\nqreg q[1];\nrz(pi/4) q[0];\nrx(pi/8) q[0];\nrz(pi/4) q[0];`
   const zzz = `OPENQASM 2.0;\nqreg q[3];\n\ncx q[2], q[1];\ncx q[1], q[0];\nrz(pi/4) q[0];\ncx q[1], q[0];\ncx q[2], q[1];`

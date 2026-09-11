@@ -130,7 +130,6 @@ export default function ZX_App() {
     }
     
     const data: GraphApiResponse = await res.json()
-    console.log(data)
 
     const edgePairs: [number, number][] = data.edges.map(([src, tgt]) => [src, tgt]);
     const levelMap = computeLevels(data.inputs, data.outputs, edgePairs, data.size);

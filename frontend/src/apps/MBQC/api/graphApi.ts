@@ -51,19 +51,17 @@ export const writeGraphToBackend = async (
   if (!response.ok) {
     throw new Error(`Failed to write graph: ${response.statusText}`);
   }
-
-  console.log("Graph successfully sent to backend.");
 };
 
 export const executeGraphOperation = async (
-  operation: Record<string, any>
+  operation: Record<string, unknown>
 ): Promise<GraphApiResponse> => {
   return executeAPIOperation("graph", operation);
 };
 
 export const executeAPIOperation = async (
   apiExtension: string,
-  operation: Record<string, any>
+  operation: Record<string, unknown>
 ): Promise<GraphApiResponse> => {
   const response = await fetch(`${API_BASE_URL}/${apiExtension}`, {
     method: "POST",

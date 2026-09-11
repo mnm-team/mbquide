@@ -42,7 +42,6 @@ function parseAmplitude(str: string): Complex | null {
     if (e === "" || e === "+") return 1;
     if (e === "-") return -1;
     try {
-      // eslint-disable-next-line no-new-func
       return Function('"use strict"; const Math = globalThis.Math; return (' + e + ")")() as number;
     } catch {
       return NaN;

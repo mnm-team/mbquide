@@ -28,7 +28,7 @@ export const createRelabelingPlanarOperation = (
   nodeId: number,
   preferredBasis?: string
 ) => {
-  const operation: Record<string, any> = {
+  const operation: Record<string, unknown> = {
     operation: "relabel-planar",
     node: nodeId,
   };

@@ -57,11 +57,15 @@ const SimulatorApp: React.FC = () => {
   const canUndo = undoStack.length > 0;
   const canRedo = redoStack.length > 0;
 
+  // Parked: the undo/redo UI (below, onUndo/onRedo) is currently commented
+  // out, so these aren't called yet — kept for when that's re-enabled.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const saveHistory = (currentData: SimData) => {
     setUndoStack(prev => [...prev, currentData]);
     setRedoStack([]);
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleUndo = () => {
     if (!canUndo) return;
     const lastState = undoStack[undoStack.length - 1];
@@ -70,6 +74,7 @@ const SimulatorApp: React.FC = () => {
     updateSimulator(lastState);
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleRedo = () => {
     if (!canRedo) return;
     const nextState = redoStack[redoStack.length - 1];
@@ -182,8 +187,7 @@ const SimulatorApp: React.FC = () => {
       }
 
       const json: SimData = await res.json();
-      console.log(json);
-      updateSimulator(json);      
+      updateSimulator(json);
       setLoading(false);
     };
 

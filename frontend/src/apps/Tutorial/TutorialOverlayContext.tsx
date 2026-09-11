@@ -49,6 +49,11 @@ export function TutorialOverlayProvider({ children }: { children: ReactNode }) {
   return <TutorialOverlayContext.Provider value={value}>{children}</TutorialOverlayContext.Provider>;
 }
 
+// Co-located with the provider/context above on purpose (standard React
+// context+hook pattern); the only cost is slightly less smooth Fast Refresh
+// on edits here, not a correctness issue, so splitting into two files isn't
+// worth the churn on the four call sites that import from this module.
+// eslint-disable-next-line react-refresh/only-export-components
 export function useTutorialOverlay() {
   const ctx = useContext(TutorialOverlayContext);
   if (!ctx) {

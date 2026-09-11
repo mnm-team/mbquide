@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { BrowserRouter, Routes, Route, useNavigate } from "react-router-dom";
+import React from 'react';
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import ReactDOM from 'react-dom/client';
 import MBQC_App from './apps/MBQC';
 import ZX_App from './apps/ZX_App';
@@ -14,27 +14,22 @@ import { TutorialOverlayProvider } from './apps/Tutorial/TutorialOverlayContext'
 import TutorialOverlay from './apps/Tutorial/TutorialOverlay';
 
 
-function Launcher() {
-
-  return (
-    <React.StrictMode>
-      <BrowserRouter>
-        <TutorialOverlayProvider>
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/MBQC" element={<MBQC_App />} />
-            <Route path="/QASM" element={<QASMInput_App />} />
-            <Route path="/ZX" element={<ZX_App />} />
-            <Route path="/SIM" element={<SimulatorApp />} />
-            <Route path="/TUTORIAL" element={<TutorialApp />} />
-            <Route path="/TUTORIAL/:id" element={<TutorialDetailApp />} />
-          </Routes>
-          <TutorialHelpButton />
-          <TutorialOverlay />
-        </TutorialOverlayProvider>
-      </BrowserRouter>
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <BrowserRouter>
+      <TutorialOverlayProvider>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/MBQC" element={<MBQC_App />} />
+          <Route path="/QASM" element={<QASMInput_App />} />
+          <Route path="/ZX" element={<ZX_App />} />
+          <Route path="/SIM" element={<SimulatorApp />} />
+          <Route path="/TUTORIAL" element={<TutorialApp />} />
+          <Route path="/TUTORIAL/:id" element={<TutorialDetailApp />} />
+        </Routes>
+        <TutorialHelpButton />
+        <TutorialOverlay />
+      </TutorialOverlayProvider>
+    </BrowserRouter>
   </React.StrictMode>
-  );
-}
-
-ReactDOM.createRoot(document.getElementById('root')!).render(<Launcher />);
+);

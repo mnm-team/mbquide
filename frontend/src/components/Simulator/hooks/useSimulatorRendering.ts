@@ -107,7 +107,7 @@ export const useSimulatorRendering = ({
 
     const simulation = d3
       .forceSimulation(nodes)
-      .force("link", d3.forceLink(simEdges).id((d: any) => d.id));
+      .force("link", d3.forceLink(simEdges).id((d) => (d as unknown as NodeType).id as unknown as string));
 
     // Root group that everything is rendered into — translated on pan
     const rootGroup = svg.append("g").attr("class", "pan-root");

@@ -1,7 +1,7 @@
 import { useEffect, useRef, RefObject } from 'react';
 import * as d3 from 'd3';
 import { NodeType, Edge, SimEdge, ContextMenuState, OutputAdjustment, LayerLine, UnfusionTarget } from '../types';
-import { OUTPUT_TABLE, SVG_DIMENSIONS } from '../utils/constants';
+import { OUTPUT_TABLE } from '../utils/constants';
 import { BRUSH_COLORS, getFillColor, getFillColorZX, getLabelColor, getLabelColorZX } from '../utils/colors';
 import { setupAllFilters } from '../rendering/renderFilters';
 import { renderEdges } from '../rendering/renderEdges';
@@ -209,7 +209,7 @@ export const useGraphSimulation = ({
 
     const simulation = d3
       .forceSimulation(mainNodes)
-      .force("link", d3.forceLink(simEdges).id((d: any) => d.id));
+      .force("link", d3.forceLink(simEdges).id((d) => (d as unknown as NodeType).id as unknown as string));
 
     // Edges
     const link = renderEdges(panGroup, simEdges);
@@ -226,7 +226,7 @@ export const useGraphSimulation = ({
       // Lets external tooling (e.g. the tutorial-recording scripts in src/apps/Tutorial/scripts)
       // target a specific node reliably instead of relying on screen position.
       .attr("data-node-id", (d) => d.id)
-      .call(createNodeDragBehavior(simulation, selectedNodesRef, setSelectedNodes, onSelectionChange, onNodeDragEnd, onNodeDragStart) as any);
+      .call(createNodeDragBehavior(simulation, selectedNodesRef, setSelectedNodes, onSelectionChange, onNodeDragEnd, onNodeDragStart));
 
     applyNodeInteractions(
       node,
@@ -262,7 +262,7 @@ export const useGraphSimulation = ({
       const unfusionKnobs = unfusionGroups.select<SVGLineElement>('line.unfusion-knob');
 
       unfusionKnobs.call(
-        createUnfusionAngleDrag(panGroup, unfusionGroups, onYZAngleChange, labelsPhase, onYZDragStart, onYZDragEnd) as any
+        createUnfusionAngleDrag(panGroup, unfusionGroups, onYZAngleChange, labelsPhase, onYZDragStart, onYZDragEnd)
       );
 
       if (onUnfusionHandleDoubleClick) {
@@ -304,7 +304,7 @@ export const useGraphSimulation = ({
       .attr("pointer-events", "all");
 
     if (buildingMode) {
-      svg.call(createEdgeDragBehavior(panGroup, edgePreviewLayer, onCreateNewEdge) as any);
+      svg.call(createEdgeDragBehavior(panGroup, edgePreviewLayer, onCreateNewEdge));
     }
 
 

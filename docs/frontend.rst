@@ -100,11 +100,12 @@ compiled ``Server`` binary serves as static files in production — see
 :doc:`guides/architecture`.
 
 .. note::
-   ``npm run lint`` currently reports a number of pre-existing errors/warnings
-   (unused variables, a few ``any`` types, a couple of ``react-hooks``/
-   ``react-refresh`` rule violations) — the config itself is not the
-   problem, those are real findings in the existing source that haven't been
-   cleaned up yet.
+   ``npm run lint`` is clean of errors. It still reports a handful of
+   ``react-hooks/exhaustive-deps`` warnings — missing ``useEffect``/
+   ``useCallback`` dependencies — left as-is deliberately: blindly adding the
+   listed dependencies risks introducing render loops or changed behavior in
+   these particular effects, so each needs a case-by-case look rather than a
+   mechanical fix.
 
 Connecting to the Backend
 ----------------------------
