@@ -1,6 +1,8 @@
 MBQuIDE Documentation
 =======================
 
+*Source code:* `github.com/mnm-team/mbquide <https://github.com/mnm-team/mbquide>`_
+
 **MBQuIDE** (Measurement-Based Quantum Interactive Development Environment) is an
 interactive graphical editor for measurement-based quantum computing (MBQC). It
 consists of a **C++ REST API backend** — which exposes the MBQC graph,
