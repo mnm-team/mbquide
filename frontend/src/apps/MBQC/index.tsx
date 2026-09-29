@@ -1,15 +1,17 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MBQC_Graph } from '../../components/Graph';
 import LoadingOverlay from '../../components/LoadingOverlay';
-import { Edge, NodeType, OutputAdjustment, emptyOutputAdjustment } from './types';
+import { Edge, NodeType, OutputAdjustment, emptyOutputAdjustment, HistoryState } from './types';
 import { useGraphState } from './hooks/useGraphState';
 import { useGraphHistory } from './hooks/useGraphHistory';
 import { useGraphApi } from './hooks/useGraphApi';
 import { useGraphValidation } from './hooks/useGraphValidation';
+import { useCanOptimizeEdges } from './hooks/useCanOptimizeEdges';
 import { ControlPanel } from '../../components/ControlPanel';
 import { BuildingModeToggle } from './ui/buildingModeToggle';
-import { getCenterOfNodes } from './utils/positioning';
+import { getCenterOfNodes, hasNodeCrossedLayer } from './utils/positioning';
+import { parsePhaseString, normalizeRadians } from '../../components/Graph/utils/angles';
 import {
   createLocalComplementationOperation,
   createPivotOperation,
@@ -17,10 +19,12 @@ import {
   createZDeletionOperation,
   createRelabelingOperation,
   createRelabelingPlanarOperation,
+  createYZUnfusionOperation,
   createGetFlowOperation,
   createFocusFlowOperation,
   createSimulateOperation,
   createSimplifyOperation,
+  createOptimizeEdgesOperation,
 } from './api/operations';
 
 export default function MBQC_App() {
@@ -38,6 +42,7 @@ export default function MBQC_App() {
     loading,
     flowFocusable,
     simulatable,
+    flowLayerLines,
     setSelectedNodes,
     setNodes,
     setEdges,
@@ -47,6 +52,7 @@ export default function MBQC_App() {
     setLoading,
     setFlowFocusable,
     setSimulatable,
+    setFlowLayerLines,
     getCurrentState,
     updateState,
   } = useGraphState();
@@ -55,7 +61,8 @@ export default function MBQC_App() {
 
   const saveCurrentStateToHistory = useCallback(() => {
     saveToHistory(getCurrentState());
-  }, [saveToHistory, getCurrentState]);
+    setFlowLayerLines(null);
+  }, [saveToHistory, getCurrentState, setFlowLayerLines]);
 
   const {
     fetchGraph,
@@ -78,6 +85,7 @@ export default function MBQC_App() {
     setFlowFocusable,
     setSimulatable,
     setSelectedNodes,
+    setFlowLayerLines,
     saveToHistory: saveCurrentStateToHistory,
   });
 
@@ -89,6 +97,8 @@ export default function MBQC_App() {
     fitForRelabeling,
     areNonPlanar,
   } = useGraphValidation(nodes, selectedNodes, edges, inputs, outputs);
+
+  const canOptimizeEdges = useCanOptimizeEdges(nodes, edges, inputs, outputs);
 
   const handleUndo = useCallback(() => {
     const previousState = undoHistory(getCurrentState());
@@ -160,6 +170,12 @@ export default function MBQC_App() {
         e.preventDefault();
         setBuildingMode(prev => !prev);
       }
+
+      // Recenter graph
+      if (e.key === 'c' || e.key === 'C') {
+        e.preventDefault();
+        setCenterGraphTrigger(prev => prev + 1);
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -168,11 +184,6 @@ export default function MBQC_App() {
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [handleUndo, handleRedo]);
-
-  const handlePrintNodes = useCallback(() => {
-    console.log('Selected Nodes:', selectedNodes);
-    setSelectedNodes([]);
-  }, [selectedNodes, setSelectedNodes]);
 
   const handleLocalComplementation = useCallback(() => {
     if (selectedNodes.length !== 1) return;
@@ -214,10 +225,84 @@ export default function MBQC_App() {
     runGraphOperation(createRelabelingPlanarOperation(selectedNodes[0].id, basis));
   }, [selectedNodes, runGraphOperation]);
 
+  // Attaches a fresh YZ pendant born at angle 0 (beta = the node's current angle), so the graph
+  // is unchanged until the user drags or types a new beta on the new handle.
+  const handleYZUnfusion = useCallback((node: NodeType) => {
+    const alpha = parsePhaseString(node.phase);
+    const pos: [number, number] = [(node.x ?? 0) + 70, (node.y ?? 0) - 70];
+    runGraphOperation(createYZUnfusionOperation(node.id, alpha), { pos });
+  }, [runGraphOperation]);
+
+  // The angle-drag handle mutates node phases in place for a smooth live preview (see
+  // unfusionAngleDrag.ts), so by the time a drag commits, xyNode/yzNode already hold the new
+  // angle - saving history at that point would capture the post-drag state as "previous" and
+  // undo would appear to do nothing. Snapshotting at drag-start (before the mutation) fixes
+  // that; mirrors dragStartSnapshotRef's use for plain node drags below.
+  const yzDragSnapshotRef = useRef<HistoryState | null>(null);
+
+  const handleYZDragStart = useCallback(() => {
+    yzDragSnapshotRef.current = getCurrentState();
+  }, [getCurrentState]);
+
+  const handleYZDragEnd = useCallback(() => {
+    yzDragSnapshotRef.current = null;
+  }, []);
+
+  // Commits an angle change from the drag handle (always target: 'xy') or its free-text modal
+  // (either node). Recomputes the alpha invariant (xyNode.phase - yzNode.phase) from the
+  // pre-edit phases rather than trusting the caller to have already applied it, so it stays
+  // correct however it's called; the node not directly targeted is then derived from it.
+  const handleYZAngleChange = useCallback(async (
+    xyNode: NodeType,
+    yzNode: NodeType,
+    angle: number,
+    target: 'xy' | 'yz' = 'xy',
+  ) => {
+    const currentBeta = parsePhaseString(xyNode.phase);
+    const currentYzPhase = parsePhaseString(yzNode.phase);
+    const alpha = normalizeRadians(currentBeta - currentYzPhase);
+    const newAngle = normalizeRadians(angle);
+    const newBeta = target === 'xy' ? newAngle : normalizeRadians(newAngle + alpha);
+    const newYzPhase = normalizeRadians(newBeta - alpha);
+
+    // The drag handle mutates xyNode/yzNode in place (see comment above), so by the time a
+    // drag commits, currentBeta/currentYzPhase already equal the new values - compare against
+    // the pre-drag snapshot instead so a drag that ends back where it started is still a no-op.
+    const preDragNodes = yzDragSnapshotRef.current?.nodes;
+    const noOpBeta = preDragNodes ? parsePhaseString(preDragNodes.find(n => n.id === xyNode.id)?.phase) : currentBeta;
+    const noOpYzPhase = preDragNodes ? parsePhaseString(preDragNodes.find(n => n.id === yzNode.id)?.phase) : currentYzPhase;
+
+    if (newBeta === noOpBeta && newYzPhase === noOpYzPhase) return;
+
+    if (yzDragSnapshotRef.current) {
+      saveToHistory(yzDragSnapshotRef.current);
+      yzDragSnapshotRef.current = null;
+      setFlowLayerLines(null);
+      setSimulatable(false);
+    } else {
+      saveCurrentStateToHistory();
+    }
+
+    const updatedNodes = nodes.map(n => {
+      if (n.id === xyNode.id) return { ...n, phase: newBeta.toString() };
+      if (n.id === yzNode.id) return { ...n, phase: newYzPhase.toString() };
+      return n;
+    });
+    setNodes(updatedNodes);
+
+    await writeGraph(updatedNodes, edges, inputs, outputs, adjustments);
+    fetchGraphPreservePositions(nodes);
+  }, [
+    nodes, edges, inputs, outputs, adjustments,
+    setNodes, writeGraph, fetchGraphPreservePositions, saveCurrentStateToHistory,
+    saveToHistory, setFlowLayerLines,
+  ]);
+
   const handleSimulate = useCallback(async () => {
     await runGraphOperation(createSimulateOperation());
-    navigate('/SIM');
-  }, [runGraphOperation, navigate]);
+    // Carry the editor's current layout over to the simulator's initial render.
+    navigate('/SIM', { state: { editorNodes: nodes } });
+  }, [runGraphOperation, navigate, nodes]);
 
   const handleGetFlow = useCallback(async () => {
     try {
@@ -235,10 +320,8 @@ export default function MBQC_App() {
       const flow = data.flow;
 
       if (flow?.ok) {
-        console.log('The graph has pauli flow!');
-        console.log(`\tCorrf: ${JSON.stringify(flow.corrf)}`);
-        console.log(`\tOdd neigbors corrf: ${JSON.stringify(flow.oddNcorrf)}`);
-        console.log(`\tDepths: ${JSON.stringify(flow.depths)}`);
+        // Preserve the pre-flow layout so undo can remove the flow again.
+        saveCurrentStateToHistory();
         orderNodesByFlow(flow.depths, flow.corrf, flow.oddNcorrf);
         setCenterGraphTrigger(prev => prev + 1);
         setFlowFocusable(true);
@@ -250,7 +333,7 @@ export default function MBQC_App() {
     } catch (error) {
       console.error('Error getting flow information:', error);
     }
-  }, [orderNodesByFlow, setFlowFocusable, setSimulatable]);
+  }, [orderNodesByFlow, setFlowFocusable, setSimulatable, saveCurrentStateToHistory]);
 
   const handleFocusFlow = useCallback(async () => {
     try {
@@ -269,15 +352,36 @@ export default function MBQC_App() {
 
       if (flow?.ok) {
         setFlowFocusable(false);
+        // Preserve the pre-focus layout so undo can revert to it.
+        saveCurrentStateToHistory();
         orderNodesByFlow(flow.depths, flow.corrf, flow.oddNcorrf);
       } else {
-        console.log('The graph has no flow after focus operation!');
         setFlowFocusable(false);
       }
     } catch (error) {
       console.error('Error focusing flow:', error);
     }
-  }, [orderNodesByFlow, setFlowFocusable]);
+  }, [orderNodesByFlow, setFlowFocusable, saveCurrentStateToHistory]);
+
+  // Snapshot taken at drag-start, so that if the drag destroys the flow the correct state is pushed onto the undo stack (the graph state at drag-end already reflects the crossed-over position, since dragging mutates nodes in place).
+  const dragStartSnapshotRef = useRef<HistoryState | null>(null);
+
+  const handleNodeDragStart = useCallback(() => {
+    dragStartSnapshotRef.current = getCurrentState();
+  }, [getCurrentState]);
+
+  // Dragging a node across a flow-layer boundary invalidates the flow.
+  const handleNodeDragEnd = useCallback((draggedNodes: NodeType[]) => {
+    if (!flowLayerLines) return;
+    if (hasNodeCrossedLayer(draggedNodes, flowLayerLines)) {
+      if (dragStartSnapshotRef.current) {
+        saveToHistory(dragStartSnapshotRef.current);
+        dragStartSnapshotRef.current = null;
+      }
+      setFlowLayerLines(null);
+      setSimulatable(false);
+    }
+  }, [flowLayerLines, setFlowLayerLines, setSimulatable, saveToHistory]);
 
   const handleNodeDrop = useCallback(async (
     droppedNode?: NodeType,
@@ -463,6 +567,11 @@ export default function MBQC_App() {
     fetchGraph();
   }, [runGraphOperation, fetchGraph]);
 
+  const handleOptimizeEdges = useCallback(async () => {
+    await runGraphOperation(createOptimizeEdgesOperation());
+    fetchGraph();
+  }, [runGraphOperation, fetchGraph]);
+
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-[#111]">
       <LoadingOverlay isLoading={loading} />
@@ -481,19 +590,28 @@ export default function MBQC_App() {
           outputs={outputs}
           outputAdjustments={adjustments}
           onSelectionChange={setSelectedNodes}
-          runLocalComplementation={handleLocalComplementation}
           runRelabeling={handleRelabeling}
           runRelabelingPlanar={handleRelabelingPlanar}
           onNodeDrop={handleNodeDrop}
+          onNodeDragStart={handleNodeDragStart}
+          onNodeDragEnd={handleNodeDragEnd}
           onNodeDelete={handleNodeDelete}
           onCreateNewEdge={handleEdgeCreation}
           onPhaseSubmit={handlePhaseSet}
+          runYZUnfusion={handleYZUnfusion}
+          onYZDragStart={handleYZDragStart}
+          onYZDragEnd={handleYZDragEnd}
+          onYZAngleChange={handleYZAngleChange}
           buildingMode={buildingMode}
           centerGraphTrigger={centerGraphTrigger}
+          flowLayerLines={flowLayerLines}
         />
 
         {/* OVERLAY CONTROL PANEL */}
-        <div className="pointer-events-none absolute bottom-4 left-1/2 z-[1000] w-full -translate-x-1/2">
+        <div
+          data-tutorial-hide="control-panel"
+          className="pointer-events-none absolute bottom-4 left-1/2 z-[1000] w-full -translate-x-1/2"
+        >
           <div className="pointer-events-auto flex justify-center px-2">
             <div className="w-fit max-w-[100vw] rounded-2xl border border-black/10 bg-white/10 p-2 backdrop-blur-xl">
               <ControlPanel
@@ -505,6 +623,7 @@ export default function MBQC_App() {
 
                 {...(!buildingMode && {
                   onSimplifyGraph: handleSimplifyGraph,
+                  onOptimizeEdges: handleOptimizeEdges,
                   onLocalComplementation: handleLocalComplementation,
                   onPivot: handlePivot,
                   onZInsertion: handleZInsertion,
@@ -517,6 +636,7 @@ export default function MBQC_App() {
                   fitForRelabeling: fitForRelabeling(),
                   areNonPlanar: areNonPlanar(),
                   simplifyGraphDisabled: !canSimplify(),
+                  optimizeEdgesDisabled: !canOptimizeEdges,
                   onGetFlow: handleGetFlow,
                   onFocusFlow: handleFocusFlow,
                   onSimulate: handleSimulate,

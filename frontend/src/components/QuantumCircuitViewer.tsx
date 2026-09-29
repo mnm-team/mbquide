@@ -134,6 +134,7 @@ const GATE_COLORS: Record<string, GateColor> = {
   t:       { bg: "#ede9fe", border: "#8b5cf6", text: "#6d28d9", dot: "#5b21b6" },
   sdg:     { bg: "#e0f2fe", border: "#0ea5e9", text: "#0369a1", dot: "#075985" },
   tdg:     { bg: "#ede9fe", border: "#8b5cf6", text: "#6d28d9", dot: "#5b21b6" },
+  sx:      { bg: "#fce7f3", border: "#ec4899", text: "#be185d", dot: "#9d174d" },
   cx:      { bg: "#fdf4ff", border: "#a855f7", text: "#7e22ce", dot: "#6b21a8" },
   cy:      { bg: "#fdf4ff", border: "#a855f7", text: "#7e22ce", dot: "#6b21a8" },
   cz:      { bg: "#fdf4ff", border: "#a855f7", text: "#7e22ce", dot: "#6b21a8" },
@@ -155,7 +156,7 @@ const GATE_COLORS: Record<string, GateColor> = {
 
 const GATE_DISPLAY: Record<string, string> = {
   h: "H", x: "X", y: "Y", z: "Z",
-  s: "S", t: "T", sdg: "S†", tdg: "T†",
+  s: "S", t: "T", sdg: "S†", tdg: "T†", sx: "√X",
   cx: "CX", cy: "CY", cz: "CZ",
   ccx: "CCX", swap: "SW",
   rx: "Rx", ry: "Ry", rz: "Rz",
@@ -611,6 +612,7 @@ export default function QuantumCircuitViewer({ qasmInput }: QuantumCircuitViewer
     { key: "z",       label: "Pauli-Z"  },
     { key: "s",       label: "Phase S"  },
     { key: "t",       label: "Phase T"  },
+    { key: "sx",      label: "√X"       },
     { key: "cx",      label: "CNOT"     },
     { key: "cz",      label: "CZ"       },
     { key: "ccx",     label: "Toffoli"  },

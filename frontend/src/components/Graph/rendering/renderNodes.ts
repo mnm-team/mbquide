@@ -26,6 +26,7 @@ export const renderNodeShapes = (
       }
 
       g.append("rect")
+        .attr("class", "node-shape")
         .attr("x", -NODE_SIZES.RECT_SIZE / 2)
         .attr("y", -NODE_SIZES.RECT_SIZE / 2)
         .attr("width", NODE_SIZES.RECT_SIZE)
@@ -43,6 +44,7 @@ export const renderNodeShapes = (
       }
 
       g.append("circle")
+        .attr("class", "node-shape")
         .attr("r", NODE_SIZES.CIRCLE_RADIUS)
         .attr("fill", colorMap(d))
         .attr("stroke", "black")

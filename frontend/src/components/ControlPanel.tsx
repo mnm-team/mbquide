@@ -2,6 +2,8 @@ import React from 'react';
 import { useNavigate } from "react-router-dom";
 
 import { ActionButton } from './Buttons';
+// focusIcon: only used by the commented-out "Focus" button below (see simButtons).
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { CodeIcon, MBQCIcon, MeasurementIcon, ZXIcon, actionIcon, undoIcon, redoIcon, flowIcon, focusIcon, resetIcon, RunAllIcon, simplificationIcon } from './Icons';
 
 type ControlButton = {
@@ -20,9 +22,11 @@ type ControlPanelProps = {
   onUndo?: () => void;
   onRedo?: () => void;
   onSimplifyGraph?: () => void;
+  onOptimizeEdges?: () => void;
   onResetGraph?: () => void;
   onResetSim?: () => void;
   simplifyGraphDisabled?: boolean;
+  optimizeEdgesDisabled?: boolean;
   resetGraphDisabled?: boolean;
   flowFocusable?: boolean;
   simulatable?: boolean;
@@ -54,13 +58,10 @@ export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
     selectedCount = 0,
     canUndo,
     canRedo,
-    flowFocusable,
     simulatable,
     isLCable,
     isPivotable,
     isZDeletable,
-    fitForRelabeling,
-    areNonPlanar,
     canResetSim,
     canRunAll,
     onPrintNodes,
@@ -68,22 +69,36 @@ export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
     onPivot,
     onZInsertion,
     onZDeletion,
-    onRelabeling,
-    onRelabelingPlanar,
     onUndo,
     onRedo,
     onSimplifyGraph,
+    onOptimizeEdges,
     onResetGraph,
     onResetSim,
     simplifyGraphDisabled,
+    optimizeEdgesDisabled,
     resetGraphDisabled,
     onTransformToZX,
     onTransformToMBQC,
     onGetFlow,
-    onFocusFlow,
     onSimulate,
     onRunAll,
   } = props;
+
+  // Relabeling now happens via the graph's right-click context menu (see
+  // Graph/ui/ContextMenu.tsx) instead of toolbar buttons, and "Focus" is
+  // parked (see the commented-out buttons below) — the parent still passes
+  // these through, kept here for when/if that toolbar UI comes back.
+  /* eslint-disable @typescript-eslint/no-unused-vars */
+  const {
+    flowFocusable,
+    fitForRelabeling,
+    areNonPlanar,
+    onRelabeling,
+    onRelabelingPlanar,
+    onFocusFlow,
+  } = props;
+  /* eslint-enable @typescript-eslint/no-unused-vars */
 
   const navigationButtons: ControlButton[] = [
     { onClick: () => navigate("/QASM"), disabled: false, label: 'New QASM', sublabel: 'Input new Qasm', icon: <CodeIcon />, show: true, },
@@ -93,7 +108,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
 
   const operationButtons: ControlButton[] = [
     { onClick: onPrintNodes, disabled: selectedCount === 0, label: 'Print', show: !!onPrintNodes },
-    { onClick: onSimplifyGraph, disabled: simplifyGraphDisabled, label: simplificationIcon + ' Simplify', sublabel: 'Automatically simplify the Graph', show: !!onSimplifyGraph },
+    { onClick: onSimplifyGraph, disabled: simplifyGraphDisabled, label: simplificationIcon + ' Reduce Nodes', sublabel: 'Automatically simplify the Graph', show: !!onSimplifyGraph },
+    { onClick: onOptimizeEdges, disabled: optimizeEdgesDisabled, label: simplificationIcon + ' Reduce Edges', sublabel: 'Greedily reduce edges via LC & Pivot', show: !!onOptimizeEdges },
     { onClick: onResetGraph, disabled: resetGraphDisabled, label: resetIcon + ' Clear', sublabel: 'Clear to empty Graph', show: !!onResetGraph },
     { onClick: onResetSim, disabled: !canResetSim, label: resetIcon + ' Reset', sublabel: 'Reset Simulator', show: !!onResetSim },
     { onClick: onLocalComplementation, disabled: !isLCable, label: actionIcon + ' LC', sublabel: 'Local Complementation', show: !!onLocalComplementation },
@@ -128,13 +144,14 @@ export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
           'border-r last:border-r-0'
         }`}
       >
-        {visibleButtons.map((b, i) => (
-          <div className='w-auto'>
+        {visibleButtons.map((b) => (
+          <div key={b.label} className='w-auto'>
             <ActionButton
               onClick={b.onClick}
               disabled={b.disabled}
               label={b.label}
               sublabel={b.sublabel}
+              sublabelAsTooltip
               icon={b.icon}
             />
           </div>

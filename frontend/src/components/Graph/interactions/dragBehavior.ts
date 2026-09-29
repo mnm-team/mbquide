@@ -5,7 +5,9 @@ export const createNodeDragBehavior = (
   simulation: d3.Simulation<NodeType, undefined>,
   selectedNodesRef: React.RefObject<NodeType[]>,
   setSelectedNodes: (nodes: NodeType[]) => void,
-  onSelectionChange?: (selected: NodeType[]) => void
+  onSelectionChange?: (selected: NodeType[]) => void,
+  onNodeDragEnd?: (nodes: NodeType[]) => void,
+  onNodeDragStart?: () => void
 ) => {
   let dragStartPositions: Map<NodeType, { x: number; y: number }> | null = null;
   let nodesToDrag: NodeType[] = [];
@@ -16,7 +18,9 @@ export const createNodeDragBehavior = (
     .filter(event => event.button === 0) // LEFT CLICK ONLY
     .on("start", (_event, d) => {
       if (!_event.active) simulation.alphaTarget(0.7).restart();
-      
+
+      if (onNodeDragStart) onNodeDragStart();
+
       const currentSelection = selectedNodesRef.current;
       const isInSelection = currentSelection.some(n => n.id === d.id);
       
@@ -56,6 +60,7 @@ export const createNodeDragBehavior = (
         setSelectedNodes([d]);
         if (onSelectionChange) onSelectionChange([d]);
       }
+      if (onNodeDragEnd) onNodeDragEnd(nodesToDrag);
       nodesToDrag = [];
     });
 };

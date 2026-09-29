@@ -18,9 +18,14 @@ export const NODE_SIZES = {
 
 export const GLOW_INTENSITY = {
   SELECTED: 7,
-  CORRECTION: 7,
-  SELECTED_INNER: 2,
-  SELECTED_OUTER: 10,
+} as const;
+
+export const HALO = {
+  GAP: 6, // Gap between a node own outer edge and innermost halo ring
+  RING_GAP: 2,  // Gap between the correction-set ring and the odd-neighborhood ring
+  
+  STROKE_WIDTH: 2.2,
+  BLUR: 0.6,
 } as const;
 
 export const OUTPUT_TABLE = {

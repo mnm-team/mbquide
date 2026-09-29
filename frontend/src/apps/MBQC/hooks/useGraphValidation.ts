@@ -80,7 +80,6 @@ export const useGraphValidation = (
 
       // 4. Z-deletable: Z basis, angle is 0 or π, not output
       if (zBases.has(basis) && !isOut) {
-        const isValidAngle = fAlmostEqual(angle, 0) || fAlmostEqual(angle, Math.PI);
         if (areNodesZDeletable([node])) return true;
       }
 

@@ -9,6 +9,13 @@
 #include "MBQC_Graph.hpp"
 #include "Flow.hpp"
 
+/**
+ * @brief Test-only helper: checks whether two ZX diagrams represent the same
+ * linear map (up to global scalar), by exporting both to PyZX JSON and
+ * shelling out to `backend/test/compare_tensors.py` (which uses `pyzx`'s
+ * tensor contraction to compare them).
+ * @return Whether the Python comparison script exited successfully (`true`) indicating the tensors match.
+ */
 inline bool compareTensors(ZXGraph zx1, ZXGraph zx2) {
     std::string file1 = "ComparisonZX_1.json";
     std::string file2 = "ComparisonZX_2.json";
@@ -27,6 +34,16 @@ inline bool compareTensors(ZXGraph zx1, ZXGraph zx2) {
 
 
 
+/**
+ * @brief Test-only helper: generates a random Clifford(+T) circuit as an
+ * OpenQASM string by shelling out to `backend/test/random_clifford.py`.
+ * @param num_qubits Number of qubits in the generated circuit.
+ * @param depth Number of gates to generate.
+ * @param p_t,p_s,p_hsh,p_cnot Optional relative weights for how often T, S,
+ * H-S-H, and CNOT gates (respectively) are chosen; passed through to the
+ * Python script's `--p_*` flags when given.
+ * @return The generated QASM source, or `""` if the Python script couldn't be run or failed.
+ */
 inline std::string randomClifford(
     int num_qubits,
     int depth,
@@ -67,6 +84,14 @@ inline std::string randomClifford(
 }
 
 
+/**
+ * @brief Test-only helper: independently verifies that `flow` satisfies the
+ * formal definition of a Pauli flow for `g` (as opposed to trusting
+ * findPauliFlow()'s own construction), by checking, for every non-output
+ * vertex `u`, the ordering/self-membership conditions on its correction set
+ * and odd neighborhood implied by `u`'s measurement basis.
+ * @return `true` if `flow` is a valid Pauli flow for `g` (also `false` if `flow.ok` is already `false`); `false` (with a diagnostic to stdout) on the first violation found.
+ */
 inline bool checkPauliFlow(
     const MBQC_Graph& g,
     const PauliFlowResult& flow
@@ -257,6 +282,14 @@ inline bool checkPauliFlow(
 }
 
 
+/**
+ * @brief Test-only helper: independently verifies that `flow` is *focused*
+ * (as opposed to trusting focus()'s own construction) — that every
+ * correction-set/odd-neighborhood entry it references (excluding outputs and
+ * self-references) is measured in a basis compatible with still being a
+ * pending correction target.
+ * @return `true` if `flow` is a valid focused flow for `g` (also `false` if `flow.ok` is already `false`); `false` (with a diagnostic to stdout) on the first violation found.
+ */
 inline bool checkFocussedFlow(
     const MBQC_Graph& g,
     const PauliFlowResult& flow

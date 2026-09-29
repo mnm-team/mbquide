@@ -25,20 +25,36 @@ std::string radiansToString(float radians) {
 
     float normalized = normalize_radians(radians);
 
-    if (fAlmostEqual(normalized, M_PI / 4)) {
+    if (fAlmostEqual(normalized, M_PI / 8)) {
+        return "\u03c0/8";
+    } else if (fAlmostEqual(normalized, M_PI / 4)) {
         return "\u03c0/4";
+    } else if (fAlmostEqual(normalized, 3 * M_PI / 8)) {
+        return "3\u03c0/8";
     } else if (fAlmostEqual(normalized, M_PI / 2)) {
         return "\u03c0/2";
+    } else if (fAlmostEqual(normalized, 5 * M_PI / 8)) {
+        return "5\u03c0/8";
     } else if (fAlmostEqual(normalized, 3 * M_PI / 4)) {
         return "3\u03c0/4";
+    } else if (fAlmostEqual(normalized, 7 * M_PI / 8)) {
+        return "7\u03c0/8";
     } else if (fAlmostEqual(normalized, M_PI)) {
         return "\u03c0";
+    } else if (fAlmostEqual(normalized, 9 * M_PI / 8)) {
+        return "9\u03c0/8";
     } else if (fAlmostEqual(normalized, 5 * M_PI / 4)) {
         return "5\u03c0/4";
+    } else if (fAlmostEqual(normalized, 11 * M_PI / 8)) {
+        return "11\u03c0/8";
     } else if (fAlmostEqual(normalized, 3 * M_PI / 2)) {
         return "3\u03c0/2";
+    } else if (fAlmostEqual(normalized, 13 * M_PI / 8)) {
+        return "13\u03c0/8";
     } else if (fAlmostEqual(normalized, 7 * M_PI / 4)) {
         return "7\u03c0/4";
+    } else if (fAlmostEqual(normalized, 15 * M_PI / 8)) {
+        return "15\u03c0/8";
     } else if (fAlmostEqual(normalized, 2 * M_PI)) {  // Should not happen
         return "2\u03c0";
     } else if (fAlmostEqual(normalized, 0)) {
@@ -60,6 +76,14 @@ double parseAngle(const std::string& angleStr) {
     if (angleStr == "3\u03c0/4") return 3 * M_PI / 4;
     if (angleStr == "5\u03c0/4") return 5 * M_PI / 4;
     if (angleStr == "7\u03c0/4") return 7 * M_PI / 4;
+    if (angleStr == "\u03c0/8") return M_PI / 8;
+    if (angleStr == "3\u03c0/8") return 3 * M_PI / 8;
+    if (angleStr == "5\u03c0/8") return 5 * M_PI / 8;
+    if (angleStr == "7\u03c0/8") return 7 * M_PI / 8;
+    if (angleStr == "9\u03c0/8") return 9 * M_PI / 8;
+    if (angleStr == "11\u03c0/8") return 11 * M_PI / 8;
+    if (angleStr == "13\u03c0/8") return 13 * M_PI / 8;
+    if (angleStr == "15\u03c0/8") return 15 * M_PI / 8;
     return std::stod(angleStr);  // fallback for numeric string
 }
 

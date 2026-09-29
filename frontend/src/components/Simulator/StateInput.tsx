@@ -42,7 +42,6 @@ function parseAmplitude(str: string): Complex | null {
     if (e === "" || e === "+") return 1;
     if (e === "-") return -1;
     try {
-      // eslint-disable-next-line no-new-func
       return Function('"use strict"; const Math = globalThis.Math; return (' + e + ")")() as number;
     } catch {
       return NaN;
@@ -190,7 +189,7 @@ export default function StateInput({
       </div>
 
       {/* Center: statevector inputs or info message */}
-      <div className="flex-1 flex">
+      <div className="flex-1 flex min-w-0">
         {numQubits > 4 ? (
           <div className="h-full flex items-center px-4 py-2 text-sm text-slate-500">
             Statevector input is disabled for systems with more than 4 input qubits.

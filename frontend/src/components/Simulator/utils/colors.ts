@@ -16,7 +16,6 @@ export const getFillColorForSimulator = (
   if (!active.includes(node.id)) {
     // Get the original color and modify it to have transparency
     const originalColor = getFillColor(node);
-    console.log("Not active: " + node.id);
     return setTransparency(originalColor, 0.6);
   }
   

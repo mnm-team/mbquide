@@ -53,7 +53,8 @@ StageTiming benchmarkPipeline(
     GraphStats& stats,
     bool simplify = false,
     int repetitions = 1,
-    bool conveyorBelt = true)
+    bool conveyorBelt = true,
+    std::string backend = "statevector")
 {
     StageTiming acc;
 
@@ -100,7 +101,7 @@ StageTiming benchmarkPipeline(
         // ----- Stage 5: Simulation -----
         auto t6 = Clock::now();
         if (flow.ok) {
-            Simulator sim(graph, flow, true, inputState, 128, conveyorBelt);
+            Simulator sim(graph, flow, true, inputState, 128, conveyorBelt, backend);
             sim.simulateAll();
         }
         auto t7 = Clock::now();
@@ -139,14 +140,14 @@ TEST_CASE("Benchmark: Random Clifford - Conveyor Belt Comparison") {
         return "(1)|" + std::string(n, '0') + ">";
     };
 
-    std::vector<int> qubitSizes = {5};
-    int max_depth = 150;
+    std::vector<int> qubitSizes = {5, 10, 15};
+    int max_depth = 5;
     int depth_step = 5;
 
     for (int nq : qubitSizes) {
 
         std::cout << "\n============================================================\n";
-        std::cout << " Random Clifford comparison — " << nq << " qubits\n";
+        std::cout << " Conveyor Belt comparison — " << nq << " qubits\n";
         std::cout << "============================================================\n\n";
 
         std::cout << std::left  << std::setw(18) << "Depth"
@@ -224,6 +225,235 @@ TEST_CASE("Benchmark: Random Clifford - Conveyor Belt Comparison") {
                       << std::setw(10) << redConv
                       << "\n";
         }
+    }
+
+    CHECK(true);
+}
+
+
+// =============================================
+// BENCHMARK: Statevector vs TensorNetwork backend
+// =============================================
+
+TEST_CASE("Benchmark: Statevector vs TensorNetwork backend") {
+
+    const int REPS = 5;
+
+    auto makeZeroInput = [](int n) -> std::string {
+        return "(1)|" + std::string(n, '0') + ">";
+    };
+
+    std::vector<int> qubitSizes = {4, 6, 8, 10};
+    int depth = 10;
+
+    std::cout << "\n============================================================\n";
+    std::cout << " Statevector vs TensorNetwork backend — depth " << depth << "\n";
+    std::cout << "============================================================\n\n";
+
+    std::cout << std::left  << std::setw(10) << "Qubits"
+              << std::right
+              << std::setw(16) << "Statevector us"
+              << std::setw(16) << "TensorNet us"
+              << std::setw(12) << "Speedup"
+              << "\n";
+    std::cout << std::string(54, '-') << "\n";
+
+    for (int nq : qubitSizes) {
+
+        std::string input = makeZeroInput(nq);
+
+        double simUs = 0.0, tnUs = 0.0;
+
+        for (int rep = 0; rep < REPS; ++rep) {
+            std::string qasm = randomClifford(nq, depth, std::nullopt, std::nullopt, std::nullopt, 0.2);
+
+            GraphStats gsSv, gsTn;
+            StageTiming tSv = benchmarkPipeline(qasm, input, gsSv, true, 1, true, "statevector");
+            StageTiming tTn = benchmarkPipeline(qasm, input, gsTn, true, 1, true, "tensornetwork");
+
+            simUs += tSv.simulate_us;
+            tnUs  += tTn.simulate_us;
+        }
+
+        simUs /= REPS;
+        tnUs  /= REPS;
+
+        double speedup = (tnUs > 0.0) ? (simUs / tnUs) : 0.0;
+
+        std::cout << std::left  << std::setw(10) << nq
+                  << std::right << std::fixed << std::setprecision(1)
+                  << std::setw(16) << simUs
+                  << std::setw(16) << tnUs
+                  << std::setprecision(2)
+                  << std::setw(11) << speedup << "x"
+                  << "\n";
+    }
+
+    CHECK(true);
+}
+
+
+// =============================================
+// BENCHMARK: Node simplify() vs Edge greedyOptimizeEdges()
+// =============================================
+
+TEST_CASE("Benchmark: simplify vs greedyOptimizeEdges") {
+
+    const int REPS = 5;
+
+    std::vector<std::pair<int, int>> sizes = {
+        {4, 10}, {6, 15}, {8, 20},{10, 25},{12, 30}, {14, 35}, {16, 40}, {18, 45}, {20, 50}, 
+    };
+
+    // A planar (XY/XZ/YZ) node whose angle is not a multiple of pi/2 is non-Clifford.
+    auto countNonClifford = [](const MBQC_Graph& g) -> int {
+        int count = 0;
+        for (int node = 0; node < g.getSize(); ++node) {
+            auto [basis, angle] = g.getMeasurement(node);
+            bool isPlanar = (basis == MeasurementBasis::XY ||
+                             basis == MeasurementBasis::XZ ||
+                             basis == MeasurementBasis::YZ);
+            if (!isPlanar) continue;
+
+            float a = normalize_radians((float)angle);
+            bool isQuarterAngle = fAlmostEqual(fmod(a, (float)(M_PI / 2)), 0);
+            if (!isQuarterAngle) ++count;
+        }
+        return count;
+    };
+
+    auto makeZeroInput = [](int n) -> std::string {
+        return "(1)|" + std::string(n, '0') + ">";
+    };
+
+    std::cout << "\n============================================================\n";
+    std::cout << " simplify() vs greedyOptimizeEdges() -- simplify+simulate total\n";
+    std::cout << "============================================================\n\n";
+
+    std::cout << std::left  << std::setw(18) << " "
+              << std::setw(40) << " Original "
+              << std::setw(55) << "simplify() pipeline"
+              << std::setw(55) << "greedyOptimizeEdges() pipeline"
+              << "\n";
+
+    std::cout << std::left  << std::setw(10) << "Qubits"
+              << std::setw(8)  << "Depth"
+              << std::right
+              << std::setw(10) << "Nodes"
+              << std::setw(12) << "NonCliff"
+              << std::setw(9)  << "Nodes"
+              << std::setw(9)  << "Edges"
+              << std::setw(11) << "simp us"
+              << std::setw(11) << "sim us"
+              << std::setw(11) << "total us"
+              << std::setw(9)  << "Nodes"
+              << std::setw(9)  << "Edges"
+              << std::setw(11) << "simp us"
+              << std::setw(11) << "sim us"
+              << std::setw(11) << "total us"
+              << std::setw(11) << "Speedup"
+              << "\n";
+    std::cout << std::string(160, '-') << "\n";
+
+    for (auto& [nq, depth] : sizes) {
+
+        double simplifyUs = 0.0, edgesUs = 0.0;
+        double simulateUsA = 0.0, simulateUsB = 0.0; // flow-finding + simulation, after each method
+        double nodesBefore = 0.0, nonCliffordBefore = 0.0;
+        double simplifyNodesAfter = 0.0, simplifyEdgesAfter = 0.0;
+        double edgesNodesAfter = 0.0, edgesEdgesAfter = 0.0;
+        int reps_done = 0;
+
+        std::string inputState = makeZeroInput(nq);
+
+        for (int rep = 0; rep < REPS; ++rep) {
+            std::string qasm = randomClifford(nq, depth, 0.4, std::nullopt, std::nullopt, 0.4);
+            if (qasm.empty()) continue;
+
+            QASMParser parser("", qasm);
+            QuantumCircuit circ = parser.parse();
+            ZXGraph zx = ZXGraph::fromQuantumCircuit(circ);
+            MBQC_Graph baseGraph = ZXtoMBQCGraph(zx);
+
+            nodesBefore        += baseGraph.getSize();
+            nonCliffordBefore  += countNonClifford(baseGraph);
+
+            // --- Path A: simplify() then flow + simulate ---
+            MBQC_Graph gSimplify = baseGraph.clone();
+            auto t0 = Clock::now();
+            gSimplify.simplify();
+            auto t1 = Clock::now();
+
+            simplifyNodesAfter += gSimplify.getSize();
+            simplifyEdgesAfter += (int)gSimplify.getAllEdges().size() / 2;
+
+            PauliFlowResult flowA = findPauliFlow(gSimplify);
+            if (flowA.ok) {
+                Simulator simA(gSimplify, flowA, true, inputState, 128, true, "tensornetwork");
+                simA.simulateAll();
+            }
+            auto t2 = Clock::now();
+
+            // --- Path B: greedyOptimizeEdges() then flow + simulate ---
+            MBQC_Graph gEdges = baseGraph.clone();
+            auto t3 = Clock::now();
+            gEdges.greedyOptimizeEdges();
+            auto t4 = Clock::now();
+
+            edgesNodesAfter += gEdges.getSize();
+            edgesEdgesAfter += (int)gEdges.getAllEdges().size() / 2;
+
+            PauliFlowResult flowB = findPauliFlow(gEdges);
+            if (flowB.ok) {
+                Simulator simB(gEdges, flowB, true, inputState, 128, true, "tensornetwork");
+                simB.simulateAll();
+            }
+            auto t5 = Clock::now();
+
+            simplifyUs  += std::chrono::duration_cast<Micros>(t1 - t0).count();
+            simulateUsA += std::chrono::duration_cast<Micros>(t2 - t1).count(); // flow + simulate
+
+            edgesUs     += std::chrono::duration_cast<Micros>(t4 - t3).count();
+            simulateUsB += std::chrono::duration_cast<Micros>(t5 - t4).count(); // flow + simulate
+
+            ++reps_done;
+        }
+
+        if (reps_done == 0) continue;
+
+        simplifyUs          /= reps_done;
+        edgesUs              /= reps_done;
+        simulateUsA          /= reps_done;
+        simulateUsB          /= reps_done;
+        nodesBefore          /= reps_done;
+        nonCliffordBefore    /= reps_done;
+        simplifyNodesAfter   /= reps_done;
+        simplifyEdgesAfter   /= reps_done;
+        edgesNodesAfter      /= reps_done;
+        edgesEdgesAfter      /= reps_done;
+
+        double totalA = simplifyUs + simulateUsA;
+        double totalB = edgesUs + simulateUsB;
+        double speedup = (totalB > 0.0) ? (totalB / totalA) : 0.0; // >1 means simplify() pipeline is faster overall
+
+        std::cout << std::left  << std::setw(10) << nq
+                  << std::setw(8)  << depth
+                  << std::right << std::fixed << std::setprecision(1)
+                  << std::setw(10) << nodesBefore
+                  << std::setw(12) << nonCliffordBefore
+                  << std::setw(9)  << simplifyNodesAfter
+                  << std::setw(9)  << simplifyEdgesAfter
+                  << std::setw(11) << simplifyUs
+                  << std::setw(11) << simulateUsA
+                  << std::setw(11) << totalA
+                  << std::setw(9)  << edgesNodesAfter
+                  << std::setw(9)  << edgesEdgesAfter
+                  << std::setw(11) << edgesUs
+                  << std::setw(11) << simulateUsB
+                  << std::setw(11) << totalB
+                  << std::setprecision(2)
+                  << std::setw(10) << speedup << "x"
+                  << "\n";
     }
 
     CHECK(true);

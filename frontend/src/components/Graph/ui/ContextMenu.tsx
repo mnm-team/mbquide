@@ -2,6 +2,7 @@ import React from 'react';
 import { NodeType } from '../types';
 import { ActionButton } from '../../Buttons';
 import { actionIcon } from '../../Icons';
+import { prettifyPhase } from '../utils/angles';
 
 type ContextMenuProps = {
   visible: boolean;
@@ -11,12 +12,13 @@ type ContextMenuProps = {
   selectedNodes: NodeType[];
   onRelabeling: () => void;
   onRelabelingPlanar: (basis: string) => void;
+  onYZUnfusion?: () => void;
 };
 
 const fitForRelabeling = (nodes: NodeType[]) => {
-  return nodes.every(n => 
+  return nodes.every(n =>
     (n.basis === "XY" || n.basis === "XZ" || n.basis === "YZ") &&
-    (!n.phase || ["", "\u03c0", "2\u03c0", "\u03c0/2", "3\u03c0/2"].includes(n.phase))
+    (!n.phase || ["", "\u03c0", "2\u03c0", "\u03c0/2", "3\u03c0/2"].includes(prettifyPhase(n.phase)))
   );
 };
 
@@ -28,6 +30,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
   selectedNodes,
   onRelabeling,
   onRelabelingPlanar,
+  onYZUnfusion,
 }) => {
   if (!visible || !node) return null;
 
@@ -48,7 +51,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     >
       <div><strong>Node ID:</strong> {node.id}</div>
       <div><strong>Basis:</strong> {node.basis}</div>
-      <div><strong>Phase:</strong> {node.phase ?? "–"}</div>
+      <div><strong>Phase:</strong> {node.phase ? prettifyPhase(node.phase) : "–"}</div>
       <div><strong>Correction Set:</strong> {node.correctionSet?.join(", ") ?? "–"}</div>
         
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -103,6 +106,15 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
               disabled={selectedNodes.length !== 1}
               label={actionIcon + ' Relabel'}
             />
+        )}
+
+        {node.basis === "XY" && onYZUnfusion && (
+          <ActionButton
+            onClick={onYZUnfusion}
+            disabled={selectedNodes.length !== 1}
+            label={actionIcon + ' YZ-Unfuse'}
+            sublabel="Attach a draggable YZ node"
+          />
         )}
       </div>
     </div>

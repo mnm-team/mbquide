@@ -1,4 +1,5 @@
 import React from "react";
+import { Tooltip } from "./Tooltip";
 
 
 type NumberButtonProps = {
@@ -52,11 +53,15 @@ type ActionButtonProps = {
   disabled?: boolean;
   label: string;
   sublabel?: string;
+  // Renders sublabel as a hover-only tooltip above the button instead of a always-visible
+  // line below the label - for compact toolbars (e.g. ControlPanel) where the sublabel is a
+  // hint rather than part of the button's permanent content.
+  sublabelAsTooltip?: boolean;
   icon?: React.ReactNode;
   arrow?: boolean;
 };
 
-export function ActionButton({ onClick, disabled, label, sublabel, icon, arrow }: ActionButtonProps) {
+export function ActionButton({ onClick, disabled, label, sublabel, sublabelAsTooltip, icon, arrow }: ActionButtonProps) {
   return (
     <button
       onClick={onClick}
@@ -98,11 +103,12 @@ export function ActionButton({ onClick, disabled, label, sublabel, icon, arrow }
           <div className="text-gray-800 group-hover:text-gray-900 text-sm font-medium transition-colors duration-200">
             {label}
           </div>
-          {sublabel && (
+          {sublabel && !sublabelAsTooltip && (
             <div className="text-gray-400 text-xs mt-0.5 transition-colors duration-200 group-hover:text-gray-500">
               {sublabel}
             </div>
           )}
+          {sublabel && sublabelAsTooltip && <Tooltip>{sublabel}</Tooltip>}
         </div>
 
         {/* Arrow */}

@@ -24,7 +24,7 @@ export const createBrushBehavior = (
     .on("end", (event) => {
       if (!event.selection) return;
       const brushLayer = d3.select(event.sourceEvent.target.parentNode);
-      brushLayer.call(d3.brush().move as any, null);
+      brushLayer.call(d3.brush().move, null);
       const [[x0, y0], [x1, y1]] = event.selection;
       const selected = nodes.filter((d) =>
         x0 <= d.x! && d.x! < x1 &&

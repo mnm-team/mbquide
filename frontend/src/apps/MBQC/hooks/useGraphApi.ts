@@ -1,10 +1,11 @@
 import { useCallback } from 'react';
 import { NodeType, Edge, OutputAdjustment, GraphApiResponse, UpdateGraphOptions } from '../types';
 import { fetchGraphFromBackend, writeGraphToBackend, executeGraphOperation } from '../api/graphApi';
-import { 
+import {
   positionNodes,
   getDepthOrderedNodes,
-  getNodePosition
+  getNodePosition,
+  LayerLine,
 } from '../utils/positioning';
 import { 
   transformApiResponseToNodes, 
@@ -28,6 +29,7 @@ type UseGraphApiProps = {
   setFlowFocusable: (focusable: boolean) => void;
   setSimulatable: (simulatable: boolean) => void;
   setSelectedNodes: (nodes: NodeType[]) => void;
+  setFlowLayerLines: (lines: LayerLine[] | null) => void;
   saveToHistory: () => void;
 };
 
@@ -46,6 +48,7 @@ export const useGraphApi = ({
   setFlowFocusable,
   setSimulatable,
   setSelectedNodes,
+  setFlowLayerLines,
   saveToHistory,
 }: UseGraphApiProps) => {
 
@@ -117,6 +120,7 @@ export const useGraphApi = ({
         customOutputs,
         customAdjustments
       );
+      setSimulatable(false);
     } catch (error) {
       console.error('Error writing graph to backend:', error);
     }
@@ -137,7 +141,7 @@ export const useGraphApi = ({
   }, [nodes, setNodes, setEdges, setInputs, setOutputs, setAdjustments]);
 
   const runGraphOperation = useCallback(async (
-    operationParams: Record<string, any>,
+    operationParams: Record<string, unknown>,
     graphOptions: UpdateGraphOptions = {},
   ) => {
     saveToHistory();
@@ -146,6 +150,7 @@ export const useGraphApi = ({
       const updatedGraphData = await executeGraphOperation(operationParams);
       updateGraph(updatedGraphData, graphOptions);
       setFlowFocusable(false);
+      setSimulatable(false);
       setSelectedNodes([]);
     } catch (error) {
       console.error(`Error running graph operation:`, error);
@@ -153,9 +158,10 @@ export const useGraphApi = ({
   }, [saveToHistory, updateGraph, setFlowFocusable, setSelectedNodes]);
 
   const orderNodesByFlow = useCallback((depths: number[], corrf: Record<number, number[]>, oddNcorrf: Record<number, number[]>) => {
-    const orderedNodes = getDepthOrderedNodes(nodes, edges, depths, corrf, oddNcorrf);
+    const { nodes: orderedNodes, layerLines } = getDepthOrderedNodes(nodes, edges, depths, corrf, oddNcorrf);
     setNodes(orderedNodes);
-  }, [nodes, setNodes]);
+    setFlowLayerLines(layerLines);
+  }, [nodes, edges, setNodes, setFlowLayerLines]);
 
   return {
     fetchGraph,

@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { GraphProps, NodeType } from './types';
+import { GraphProps, NodeType, UnfusionTarget } from './types';
 import { useGraphSimulation } from './hooks/useGraphSimulation';
 import { useContextMenu } from './hooks/useContextMenu';
 import { ContextMenu } from './ui/ContextMenu';
 import { PhaseInputModal } from './ui/phaseInputMode';
+import { RecenterHint } from './ui/RecenterHint';
 import { BACKGROUND_COLOR } from './utils/colors';
 import { getBoundingCenter } from './utils/functions';
 import { useSvgPan } from './hooks/useSvgPan';
@@ -15,19 +16,27 @@ export function MBQC_Graph({
   inputs,
   outputs,
   outputAdjustments = {},
-  runLocalComplementation,
   runRelabeling,
   runRelabelingPlanar,
   onNodeDrop,
+  onNodeDragStart,
+  onNodeDragEnd,
   onNodeDelete,
   onCreateNewEdge,
   onPhaseSubmit,
+  runYZUnfusion,
+  onYZDragStart,
+  onYZDragEnd,
+  onYZAngleChange,
   buildingMode = false,
   centerGraphTrigger,
+  flowLayerLines,
 }: GraphProps) {
   const selectedNodesRef = useRef<NodeType[]>([]);
   const [selectedNodes, setSelectedNodes] = useState<NodeType[]>([]);
   const [phaseModalNode, setPhaseModalNode] = useState<NodeType | null>(null);
+  const [angleEditPair, setAngleEditPair] = useState<{ xy: NodeType; yz: NodeType } | null>(null);
+  const [angleEditTarget, setAngleEditTarget] = useState<UnfusionTarget>('xy');
 
   const { contextMenu, setContextMenu } = useContextMenu();
 
@@ -47,6 +56,23 @@ export function MBQC_Graph({
     setPhaseModalNode(null);
   };
 
+  const handleUnfusionHandleDoubleClick = (xyNode: NodeType, yzNode: NodeType) => {
+    setAngleEditPair({ xy: xyNode, yz: yzNode });
+    setAngleEditTarget('xy');
+  };
+
+  const handleAngleEditClose = () => {
+    setAngleEditPair(null);
+  };
+
+  const handleAngleEditSubmit = (angle: number) => {
+    if (!angleEditPair) return;
+    if (onYZAngleChange) {
+      onYZAngleChange(angleEditPair.xy, angleEditPair.yz, angle, angleEditTarget);
+    }
+    setAngleEditPair(null);
+  };
+
   const { svgRef, panGroupRef, setPanOffset } = useGraphSimulation({
     mainNodes,
     edges,
@@ -64,10 +90,16 @@ export function MBQC_Graph({
     buildingMode,
     onNodeDoubleClick: handleNodeDoubleClick,
     outputAdjustments,
+    flowLayerLines,
+    onNodeDragStart,
+    onNodeDragEnd,
+    onYZDragStart,
+    onYZDragEnd,
+    onYZAngleChange,
+    onUnfusionHandleDoubleClick: handleUnfusionHandleDoubleClick,
   });
 
   const { translate, setTranslate, onPointerDown, onPointerMove, onPointerUp } = useSvgPan(svgRef);
-
 
   // Sync translate
   useEffect(() => {
@@ -118,12 +150,6 @@ export function MBQC_Graph({
 
   
   // Context menu handlers
-  const handleLocalComplementation = () => {
-    if (!runLocalComplementation) return;
-    runLocalComplementation();
-    setContextMenu({ ...contextMenu, visible: false });
-  };
-
   const handleRelabeling = () => {
     if (!runRelabeling) return;
     runRelabeling();
@@ -133,6 +159,12 @@ export function MBQC_Graph({
   const handleRelabelingPlanar = (basis: string = "") => {
     if (!runRelabelingPlanar) return;
     runRelabelingPlanar(basis);
+    setContextMenu({ ...contextMenu, visible: false });
+  };
+
+  const handleYZUnfusion = () => {
+    if (!runYZUnfusion || !contextMenu.node) return;
+    runYZUnfusion(contextMenu.node);
     setContextMenu({ ...contextMenu, visible: false });
   };
 
@@ -151,6 +183,8 @@ export function MBQC_Graph({
         onPointerLeave={onPointerUp}
       />
 
+      <RecenterHint nodes={mainNodes} offset={translate} width={1920} height={1080} />
+
       {/* Context Menu */}
       <ContextMenu
         visible={contextMenu.visible}
@@ -160,6 +194,7 @@ export function MBQC_Graph({
         selectedNodes={selectedNodes}
         onRelabeling={handleRelabeling}
         onRelabelingPlanar={handleRelabelingPlanar}
+        onYZUnfusion={runYZUnfusion ? handleYZUnfusion : undefined}
       />
 
       <PhaseInputModal
@@ -168,6 +203,27 @@ export function MBQC_Graph({
         onClose={handlePhaseModalClose}
         onSubmit={handlePhaseSubmit}
       />
+
+      {angleEditPair && (
+        <PhaseInputModal
+          key={angleEditTarget}
+          node={{ ...angleEditPair.xy, basis: 'XY' }}
+          isOpen={angleEditPair !== null}
+          onClose={handleAngleEditClose}
+          onSubmit={handleAngleEditSubmit}
+          title={
+            angleEditTarget === 'xy'
+              ? `Set the XY angle (Node ${angleEditPair.xy.id})`
+              : `Set the YZ angle (Node ${angleEditPair.yz.id})`
+          }
+          targetOptions={[
+            { value: 'xy', label: `Node ${angleEditPair.xy.id} (XY)` },
+            { value: 'yz', label: `Node ${angleEditPair.yz.id} (YZ)` },
+          ]}
+          selectedTargetValue={angleEditTarget}
+          onTargetChange={(value) => setAngleEditTarget(value as UnfusionTarget)}
+        />
+      )}
     </div>
   );
 }

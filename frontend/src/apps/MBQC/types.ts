@@ -8,6 +8,7 @@ export type NodeType = {
   y?: number;
   fx?: number | null;
   fy?: number | null;
+  flowDepth?: number;
 };
 
 export type Edge = {
@@ -45,12 +46,21 @@ export type UpdateGraphOptions = {
   deleted_indices?: number[];
 };
 
+export type LayerLine = {
+  x: number;
+  y1: number;
+  y2: number;
+};
+
 export type GraphState = {
   nodes: NodeType[];
   edges: Edge[];
   inputs: number[];
   outputs: number[];
   adjustments: Record<string, OutputAdjustment>;
+  flowLayerLines: LayerLine[] | null;
+  simulatable: boolean;
+  flowFocusable: boolean;
 };
 
 export type HistoryState = GraphState;

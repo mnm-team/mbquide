@@ -1,11 +1,12 @@
 import { useEffect, useRef, RefObject } from 'react';
 import * as d3 from 'd3';
-import { NodeType, Edge, SimEdge, ContextMenuState, OutputAdjustment } from '../types';
-import { OUTPUT_TABLE, SVG_DIMENSIONS } from '../utils/constants';
+import { NodeType, Edge, SimEdge, ContextMenuState, OutputAdjustment, LayerLine, UnfusionTarget } from '../types';
+import { OUTPUT_TABLE } from '../utils/constants';
 import { BRUSH_COLORS, getFillColor, getFillColorZX, getLabelColor, getLabelColorZX } from '../utils/colors';
 import { setupAllFilters } from '../rendering/renderFilters';
 import { renderEdges } from '../rendering/renderEdges';
 import { renderNodeShapes } from '../rendering/renderNodes';
+import { renderMembershipHalos } from '../rendering/renderHalos';
 import { renderBasisLabels, renderPhaseLabels } from '../rendering/renderLabels';
 import { renderOutputTables } from '../rendering/renderOutputTables';
 import { createExampleNodes, renderExampleNodeShapes, renderExampleLabels } from '../rendering/renderExamples';
@@ -14,6 +15,14 @@ import { createExampleDragBehavior } from '../interactions/exampleDrag';
 import { createBrushBehavior } from '../interactions/brushBehavior';
 import { createEdgeDragBehavior } from '../interactions/edgeCreation';
 import { applyNodeInteractions } from '../interactions/nodeInteractions';
+import { createUnfusionAngleDrag } from '../interactions/unfusionAngleDrag';
+import {
+  findUnfusionPairs,
+  renderUnfusionHandles,
+  updateUnfusionHandles,
+  updateUnfusionHandleVisibility,
+  UnfusionPair,
+} from '../rendering/renderUnfusionHandles';
 
 type UseGraphSimulationProps = {
   mainNodes: NodeType[];
@@ -27,6 +36,8 @@ type UseGraphSimulationProps = {
   contextMenu?: ContextMenuState;
   onSelectionChange?: (selected: NodeType[]) => void;
   onNodeDrop?: (node?: NodeType, x?: number, y?: number, isInput?: boolean) => void;
+  onNodeDragStart?: () => void;
+  onNodeDragEnd?: (nodes: NodeType[]) => void;
   onNodeDelete?: (nodes?: NodeType[]) => void;
   onCreateNewEdge?: (edge?: Edge) => void;
   buildingMode?: boolean;
@@ -34,6 +45,11 @@ type UseGraphSimulationProps = {
   ignoreExamples?: boolean;
   classicZXcolors?: boolean;
   outputAdjustments?: Record<number, OutputAdjustment>;
+  flowLayerLines?: LayerLine[] | null;
+  onYZDragStart?: () => void;
+  onYZDragEnd?: () => void;
+  onYZAngleChange?: (xyNode: NodeType, yzNode: NodeType, angle: number, target: UnfusionTarget) => void;
+  onUnfusionHandleDoubleClick?: (xyNode: NodeType, yzNode: NodeType) => void;
 };
 
 export const useGraphSimulation = ({
@@ -48,6 +64,8 @@ export const useGraphSimulation = ({
   contextMenu,
   onSelectionChange,
   onNodeDrop,
+  onNodeDragStart,
+  onNodeDragEnd,
   onNodeDelete,
   onCreateNewEdge,
   buildingMode,
@@ -55,41 +73,53 @@ export const useGraphSimulation = ({
   ignoreExamples,
   classicZXcolors,
   outputAdjustments,
+  flowLayerLines,
+  onYZDragStart,
+  onYZDragEnd,
+  onYZAngleChange,
+  onUnfusionHandleDoubleClick,
 }: UseGraphSimulationProps) => {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const nodeGroupRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null);
   const panGroupRef = useRef<SVGGElement | null>(null);
   const panOffsetRef = useRef({ x: 0, y: 0 });
+  const unfusionGroupsRef = useRef<d3.Selection<SVGGElement, UnfusionPair, SVGGElement, unknown> | null>(null);
 
   const setPanOffset = (offset: { x: number; y: number }) => {
     panOffsetRef.current = offset;
   };
 
-  // Update glow filters on selected nodes
+  // Update selection glow and correction/odd-correction halo rings
   useEffect(() => {
     const id = requestAnimationFrame(() => {
       if (!nodeGroupRef.current) return;
 
-      const correctionSetIds: number[] = selectedNodes.flatMap(n => n.correctionSet || []);
-      const oddCorrectionSetIds: number[] = selectedNodes.flatMap(n => n.oddCorrectionSet || []);
+      // once flowLayerLines are cleared (e.g. a drag crosses a layer), 
+      // correctionSet/oddCorrectionSet data left on node objects must stop being shown.
+      const flowValid = !!(flowLayerLines && flowLayerLines.length > 0);
+      const correctionSetIds: number[] = flowValid ? selectedNodes.flatMap(n => n.correctionSet || []) : [];
+      const oddCorrectionSetIds: number[] = flowValid ? selectedNodes.flatMap(n => n.oddCorrectionSet || []) : [];
 
       nodeGroupRef.current
-        .selectAll<SVGCircleElement | SVGRectElement, NodeType>("circle, rect")
-        .attr("filter", (d) => {
-          const isSelected = selectedNodes.some(n => n.id === d.id);
-          const isInCorrection = correctionSetIds.includes(d.id);
-          const isInOddCorrection = oddCorrectionSetIds.includes(d.id);
+        .selectAll<SVGCircleElement | SVGRectElement, NodeType>("circle.node-shape, rect.node-shape")
+        .attr("filter", (d) => (selectedNodes.some(n => n.id === d.id) ? "url(#selectedGlow)" : null));
 
-          if (isSelected && isInCorrection) return "url(#selectedCorrectionGlow)";
-          if (isSelected)                   return "url(#selectedGlow)";
-          if (isInCorrection)               return "url(#correctionGlow)";
-          if (isInOddCorrection)            return "url(#oddCorrectionGlow)";
-          return null;
-        });
+      nodeGroupRef.current
+        .selectAll<SVGCircleElement, NodeType>("circle.halo-correction")
+        .style("display", (d) => (correctionSetIds.includes(d.id) ? null : "none"));
+
+      nodeGroupRef.current
+        .selectAll<SVGCircleElement, NodeType>("circle.halo-odd-correction")
+        .style("display", (d) => (oddCorrectionSetIds.includes(d.id) ? null : "none"));
+
+      if (unfusionGroupsRef.current) {
+        const selectedIds = new Set(selectedNodes.map((n) => n.id));
+        updateUnfusionHandleVisibility(unfusionGroupsRef.current, selectedIds);
+      }
     });
 
     return () => cancelAnimationFrame(id);
-  }, [selectedNodes]);
+  }, [selectedNodes, flowLayerLines]);
 
   // Full D3 render
   useEffect(() => {
@@ -155,16 +185,34 @@ export const useGraphSimulation = ({
     const defs = panGroup.append('defs');
     setupAllFilters(defs);
 
+    // Flow layer separator lines (dashed), drawn behind edges and nodes.
+    if (flowLayerLines && flowLayerLines.length > 0) {
+      panGroup
+        .append('g')
+        .attr('class', 'flow-layer-lines')
+        .style('pointer-events', 'none')
+        .selectAll('line')
+        .data(flowLayerLines)
+        .join('line')
+        .attr('x1', d => d.x)
+        .attr('x2', d => d.x)
+        .attr('y1', d => d.y1)
+        .attr('y2', d => d.y2)
+        .attr('stroke', '#888')
+        .attr('stroke-width', 1.5)
+        .attr('stroke-dasharray', '8,6')
+        .attr('opacity', 0.5);
+    }
+
     // Simulation data
     const simEdges = edges.map(e => ({ ...e, source: e.source, target: e.target })) as unknown as SimEdge[];
 
     const simulation = d3
       .forceSimulation(mainNodes)
-      .force("link", d3.forceLink(simEdges).id((d: any) => d.id));
+      .force("link", d3.forceLink(simEdges).id((d) => (d as unknown as NodeType).id as unknown as string));
 
     // Edges
     const link = renderEdges(panGroup, simEdges);
-
 
     // Main node group
     const nodeGroup = panGroup.append("g").attr("stroke", "#fff");
@@ -175,7 +223,10 @@ export const useGraphSimulation = ({
       .data(mainNodes)
       .join("g")
       .attr("class", "node")
-      .call(createNodeDragBehavior(simulation, selectedNodesRef, setSelectedNodes, onSelectionChange) as any);
+      // Lets external tooling (e.g. the tutorial-recording scripts in src/apps/Tutorial/scripts)
+      // target a specific node reliably instead of relying on screen position.
+      .attr("data-node-id", (d) => d.id)
+      .call(createNodeDragBehavior(simulation, selectedNodesRef, setSelectedNodes, onSelectionChange, onNodeDragEnd, onNodeDragStart));
 
     applyNodeInteractions(
       node,
@@ -188,16 +239,44 @@ export const useGraphSimulation = ({
     );
 
     renderNodeShapes(node, inputs, outputs, classicZXcolors ? getFillColorZX : getFillColor);
+    renderMembershipHalos(node, inputs, outputs);
 
     // Labels & output tables
     const labelsT = renderBasisLabels(panGroup, mainNodes, classicZXcolors ? getLabelColorZX : getLabelColor);
     const labelsPhase = renderPhaseLabels(panGroup, mainNodes);
     const outputTableGroups = renderOutputTables(panGroup, mainNodes, outputs, outputAdjustments ?? {});
 
+    // YZ-unfusion angle handles: any XY node with a pendant (degree-1) YZ neighbor gets a
+    // draggable bead on that edge for adjusting beta. Gated on onYZAngleChange so the plain
+    // ZX_Graph view (which never passes it) never renders these, and hidden while building
+    // mode is active since the handles would otherwise clutter node placement/wiring.
+    const showUnfusionHandles = !!onYZAngleChange && !buildingMode;
+    const unfusionPairs = showUnfusionHandles ? findUnfusionPairs(simEdges) : [];
+    const unfusionGroups = showUnfusionHandles ? renderUnfusionHandles(panGroup, unfusionPairs) : null;
+    unfusionGroupsRef.current = unfusionGroups;
+
+    if (unfusionGroups && showUnfusionHandles) {
+      updateUnfusionHandleVisibility(unfusionGroups, new Set(selectedNodes.map((n) => n.id)));
+
+      // Attach interactions to the knob bar only, so the wire/ticks stay purely decorative.
+      const unfusionKnobs = unfusionGroups.select<SVGLineElement>('line.unfusion-knob');
+
+      unfusionKnobs.call(
+        createUnfusionAngleDrag(panGroup, unfusionGroups, onYZAngleChange, labelsPhase, onYZDragStart, onYZDragEnd)
+      );
+
+      if (onUnfusionHandleDoubleClick) {
+        unfusionKnobs.on('dblclick', (event, d) => {
+          event.stopPropagation();
+          onUnfusionHandleDoubleClick(d.xy, d.yz);
+        });
+      }
+    }
+
     // Example nodes
     // Appended directly to svg (not panGroup) so they stay fixed on screen.
     const exampleNodes = createExampleNodes();
-    const exampleGroup = svg.append("g").attr("class", "examples");
+    const exampleGroup = svg.append("g").attr("class", "examples").attr("data-tutorial-hide", "example-palette");
 
     const example = exampleGroup
       .selectAll<SVGGElement, NodeType>("g")
@@ -225,7 +304,7 @@ export const useGraphSimulation = ({
       .attr("pointer-events", "all");
 
     if (buildingMode) {
-      svg.call(createEdgeDragBehavior(panGroup, edgePreviewLayer, onCreateNewEdge) as any);
+      svg.call(createEdgeDragBehavior(panGroup, edgePreviewLayer, onCreateNewEdge));
     }
 
 
@@ -242,6 +321,8 @@ export const useGraphSimulation = ({
       labelsT.attr("x", d => d.x!).attr("y", d => d.y!);
       labelsPhase.attr("x", d => d.x!).attr("y", d => d.y!);
 
+      if (unfusionGroups) updateUnfusionHandles(unfusionGroups);
+
       outputTableGroups.attr(
         'transform',
         d => `translate(${(d.x ?? 0) + OUTPUT_TABLE.X_OFFSET}, ${(d.y ?? 0) + OUTPUT_TABLE.Y_OFFSET})`,
@@ -255,7 +336,7 @@ export const useGraphSimulation = ({
       window.removeEventListener("keyup", handleKeyUp);
     };
 
-  }, [mainNodes, edges, inputs, outputs, onNodeDrop, contextMenu?.visible, buildingMode]);
+  }, [mainNodes, edges, inputs, outputs, onNodeDrop, contextMenu?.visible, buildingMode, flowLayerLines]);
 
   return { svgRef, nodeGroupRef, panGroupRef, setPanOffset};
 };

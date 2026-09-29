@@ -19,7 +19,7 @@ export const createExampleDragBehavior = (
 
   return d3.drag<SVGGElement, NodeType, NodeType>()
     .on("start", function(_event, d) {
-      const selection = d3.select(this) as d3.Selection<SVGGElement, NodeType, any, any>;
+      const selection = d3.select(this) as d3.Selection<SVGGElement, NodeType, null, undefined>;
       selection.style("cursor", "grabbing");
 
       // Clone goes into panGroup so it shares the same coordinate space
@@ -102,7 +102,7 @@ export const createExampleDragBehavior = (
       }
     })
     .on("end", function(event, d) {
-      const selection = d3.select(this) as d3.Selection<SVGGElement, NodeType, any, any>;
+      const selection = d3.select(this) as d3.Selection<SVGGElement, NodeType, null, undefined>;
       selection.style("cursor", "grab");
 
       const clone = selection.node()!.__dragClone;

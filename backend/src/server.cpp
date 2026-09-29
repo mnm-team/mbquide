@@ -224,6 +224,10 @@ int main() {
                     } else {
                         graph.relabelPlanar(u);
                     }
+                } else if (op == "yz-unfusion") {
+                    int u = body["node"];
+                    double beta = body["beta"];
+                    graph.YZUnfusion(u, beta);
                 }
 
                 j = graph.toJson();
@@ -231,6 +235,15 @@ int main() {
             } else if (body.contains("simplify")) {
                 graph.simplify();
                 j = graph.toJson();
+
+            } else if (body.contains("optimizeEdges")) {
+                graph.greedyOptimizeEdges();
+                j = graph.toJson();
+
+            } else if (body.contains("checkOptimizeEdges")) {
+                // Read-only check: does NOT mutate the session graph, just reports whether
+                // greedyOptimizeEdges() would apply at least one rewrite right now.
+                j = json{{"canOptimizeEdges", graph.canOptimizeEdges()}};
 
             } else if (body.contains("flow")) {
                 std::string flow = body["flow"];

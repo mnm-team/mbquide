@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
-import { NodeType, Edge, SimEdge, OutputAdjustment } from '../types';
+import { NodeType, Edge, SimEdge, OutputAdjustment, LayerLine } from '../types';
 
 // Reuse rendering from MBQC_Graph
 import { setupAllFilters } from '../../Graph/rendering/renderFilters';
 import { renderEdges } from '../../Graph/rendering/renderEdges';
 import { renderNodeShapes } from '../../Graph/rendering/renderNodes';
+import { renderMembershipHalos } from '../../Graph/rendering/renderHalos';
 import { renderOutputTables } from '../../Graph/rendering/renderOutputTables';
+import { getBoundingCenter } from '../../Graph/utils/functions';
 
 // Simulator-specific rendering
 import { renderBasisLabelsWithOutcomes, renderPhaseLabelsSimulator, renderIdLabels } from '../rendering/renderLabels';
@@ -28,6 +30,8 @@ type UseSimulatorRenderingProps = {
   onSelectionChange?: (selected: NodeType[]) => void;
   measureOperation?: (id: number) => void;
   outputAdjustments?: Record<number, OutputAdjustment>;
+  flowLayerLines?: LayerLine[] | null;
+  centerGraphTrigger?: number;
 };
 
 export const useSimulatorRendering = ({
@@ -46,13 +50,17 @@ export const useSimulatorRendering = ({
   onSelectionChange,
   measureOperation,
   outputAdjustments,
+  flowLayerLines,
+  centerGraphTrigger,
 }: UseSimulatorRenderingProps) => {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const nodeGroupRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null);
+  const rootGroupRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null);
 
   const panOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const [panOffset, setPanOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const scaleRef = useRef<number>(1);
+  const [scale, setScale] = useState<number>(1);
 
 
   useEffect(() => {
@@ -67,22 +75,16 @@ export const useSimulatorRendering = ({
       );
 
       nodeGroupRef.current
-        .selectAll<SVGCircleElement | SVGRectElement, NodeType>("circle, rect")
-        .attr("filter", (d) => {
-          const isSelected = selectedNodes.some(node => node.id === d.id);
-          const isInCorrection = correctionSetIds.includes(d.id);
-          const isInOddCorrection = oddCorrectionSetIds.includes(d.id);
+        .selectAll<SVGCircleElement | SVGRectElement, NodeType>("circle.node-shape, rect.node-shape")
+        .attr("filter", (d) => (selectedNodes.some(node => node.id === d.id) ? "url(#selectedGlow)" : null));
 
-          return isSelected && isInCorrection
-            ? "url(#selectedCorrectionGlow)"
-            : isSelected
-            ? "url(#selectedGlow)"
-            : isInCorrection
-            ? "url(#correctionGlow)"
-            : isInOddCorrection
-            ? "url(#oddCorrectionGlow)"
-            : null;
-        });
+      nodeGroupRef.current
+        .selectAll<SVGCircleElement, NodeType>("circle.halo-correction")
+        .style("display", (d) => (correctionSetIds.includes(d.id) ? null : "none"));
+
+      nodeGroupRef.current
+        .selectAll<SVGCircleElement, NodeType>("circle.halo-odd-correction")
+        .style("display", (d) => (oddCorrectionSetIds.includes(d.id) ? null : "none"));
     });
 
     return () => cancelAnimationFrame(id);
@@ -105,15 +107,35 @@ export const useSimulatorRendering = ({
 
     const simulation = d3
       .forceSimulation(nodes)
-      .force("link", d3.forceLink(simEdges).id((d: any) => d.id));
+      .force("link", d3.forceLink(simEdges).id((d) => (d as unknown as NodeType).id as unknown as string));
 
     // Root group that everything is rendered into — translated on pan
     const rootGroup = svg.append("g").attr("class", "pan-root");
+    rootGroupRef.current = rootGroup;
 
     rootGroup.attr(
       "transform",
       `translate(${panOffsetRef.current.x},${panOffsetRef.current.y}) scale(${scaleRef.current})`
     );
+
+    // Flow layer separator lines (dashed), drawn behind edges and nodes.
+    if (flowLayerLines && flowLayerLines.length > 0) {
+      rootGroup
+        .append('g')
+        .attr('class', 'flow-layer-lines')
+        .style('pointer-events', 'none')
+        .selectAll('line')
+        .data(flowLayerLines)
+        .join('line')
+        .attr('x1', d => d.x)
+        .attr('x2', d => d.x)
+        .attr('y1', d => d.y1)
+        .attr('y2', d => d.y2)
+        .attr('stroke', '#888')
+        .attr('stroke-width', 1.5)
+        .attr('stroke-dasharray', '8,6')
+        .attr('opacity', 0.5);
+    }
 
     let isDragging = false;
     let dragStart = { x: 0, y: 0 };
@@ -176,6 +198,7 @@ export const useSimulatorRendering = ({
         `translate(${panOffsetRef.current.x},${panOffsetRef.current.y}) scale(${newScale})`
       );
       setPanOffset({ ...panOffsetRef.current });
+      setScale(newScale);
     });
 
     const link = renderEdges(rootGroup, simEdges);
@@ -186,7 +209,8 @@ export const useSimulatorRendering = ({
     const node = nodeGroup
       .selectAll<SVGGElement, NodeType>("g")
       .data(nodes)
-      .join("g");
+      .join("g")
+      .attr("data-node-id", (d) => d.id);
 
     node.on("click", function (_event, clicked) {
       setSelectedNodes([clicked]);
@@ -206,6 +230,7 @@ export const useSimulatorRendering = ({
 
 
     renderNodeShapes(node, inputs, outputs, (d: NodeType) => getFillColorForSimulator(d, measured, active));
+    renderMembershipHalos(node, inputs, outputs);
 
     const labelsT = renderBasisLabelsWithOutcomes(rootGroup, nodes, outcomes);
     const labelsPhase = renderPhaseLabelsSimulator(rootGroup, nodes, measured);
@@ -233,7 +258,27 @@ export const useSimulatorRendering = ({
       svg.style("cursor", null);
     };
 
-  }, [mainNodes, edges, inputs, outputs, measured, outcomes, readyToMeasure, width, height]);
+  }, [mainNodes, edges, inputs, outputs, measured, outcomes, readyToMeasure, width, height, flowLayerLines]);
 
-  return { svgRef };
+  // Recenter pan (keeping current zoom) so the nodes' bounding box is centered in the viewport
+  useEffect(() => {
+    if (!centerGraphTrigger) return;
+    if (!rootGroupRef.current || mainNodes.length === 0) return;
+
+    const center = getBoundingCenter(mainNodes);
+    const currentScale = scaleRef.current;
+    const next = {
+      x: width / 2 - center.x * currentScale,
+      y: height / 2 - center.y * currentScale,
+    };
+
+    panOffsetRef.current = next;
+    rootGroupRef.current.attr(
+      "transform",
+      `translate(${next.x},${next.y}) scale(${currentScale})`
+    );
+    setPanOffset(next);
+  }, [centerGraphTrigger]);
+
+  return { svgRef, panOffset, scale };
 };

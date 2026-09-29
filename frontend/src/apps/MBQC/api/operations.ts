@@ -28,7 +28,7 @@ export const createRelabelingPlanarOperation = (
   nodeId: number,
   preferredBasis?: string
 ) => {
-  const operation: Record<string, any> = {
+  const operation: Record<string, unknown> = {
     operation: "relabel-planar",
     node: nodeId,
   };
@@ -39,6 +39,12 @@ export const createRelabelingPlanarOperation = (
 
   return operation;
 };
+
+export const createYZUnfusionOperation = (nodeId: number, beta: number) => ({
+  operation: "yz-unfusion",
+  node: nodeId,
+  beta,
+});
 
 export const createGetFlowOperation = () => ({
   flow: "pauli",
@@ -51,6 +57,10 @@ export const createFocusFlowOperation = () => ({
 
 export const createSimplifyOperation = () => ({
   simplify: true,
+});
+
+export const createOptimizeEdgesOperation = () => ({
+  optimizeEdges: true,
 });
 
 export const createSimulateOperation = (input: string = "") => ({

@@ -1,8 +1,11 @@
 import { useNavigate } from "react-router-dom";
 import { ActionButton } from "./components/Buttons";
 import { CodeIcon, MBQCIcon } from "./components/Icons";
+// Only used by the commented-out footer <img>s below; kept ready for when that comes back.
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import lmuLogo from "./assets/lmu_logo.png";
 import mnmLogo from "./assets/mnm_logo.png";
+/* eslint-enable @typescript-eslint/no-unused-vars */
 import mbquideLogo from "./assets/mbquide.png";
 
 export default function Home() {
