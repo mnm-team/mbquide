@@ -178,7 +178,7 @@ Load a circuit from OpenQASM and convert it into an MBQC graph:
 
 See :doc:`../guides/examples` for a longer walkthrough covering flow-finding
 and simulation, :doc:`../api/rest` for the full endpoint reference, and
-:doc:`../api/cpp` for the C++ class reference.
+:doc:`../api/cpp/graph` for the C++ class reference.
 
 Run the Tests
 ~~~~~~~~~~~~~~~~

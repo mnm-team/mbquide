@@ -119,7 +119,7 @@ computing flow, which can reduce edge count and measurement depth:
 
 See :doc:`../guides/architecture` for what ``simplify()`` and
 ``greedyOptimizeEdges()`` do under the hood (local complementation/pivot
-rewrites), and :cpp:class:`MBQC_Graph` in the :doc:`../api/cpp` for the
+rewrites), and :cpp:class:`MBQC_Graph` in the :doc:`../api/cpp/graph` for the
 full rewrite-rule API.
 
 Example 4: Using ``mbquide_core`` Directly From C++

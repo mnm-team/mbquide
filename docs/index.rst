@@ -46,10 +46,24 @@ that REST API.
 
 .. toctree::
    :maxdepth: 3
-   :caption: Reference
+   :caption: REST API
 
    api/rest
-   api/cpp
+
+.. toctree::
+   :maxdepth: 3
+   :caption: C++ API
+
+   api/cpp/graph
+   api/cpp/zx
+   api/cpp/circuits
+   api/cpp/simulation
+   api/cpp/utilities
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Troubleshooting
+
    troubleshooting
 
 Indices and Tables

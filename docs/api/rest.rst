@@ -1,4 +1,4 @@
-REST API Reference
+REST API
 ====================
 
 All endpoints are served from the same process as the compiled frontend
@@ -139,7 +139,7 @@ if none has been initialized yet).
 
 ``init`` accepts an optional ``maxVecSize`` to bound the statevector backend
 before it switches to a tensor-network backend — see the ``SimulatorBackendType``
-entry in the :doc:`cpp`.
+entry in the :doc:`cpp/simulation`.
 
 Static Frontend Routes
 --------------------------
