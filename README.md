@@ -31,7 +31,7 @@ Download and run a pre-built binary for your platform — no compiler needed.
 ```bash
 mkdir -p MBQuIDE
 cd MBQuIDE
-curl -L https://github.com/mnm-team/mbquide/releases/latest/download/mbquide-v0.1.0-linux-ubuntu24.tar.gz | tar -xz
+curl -L https://github.com/mnm-team/mbquide/releases/latest/download/mbquide-v0.1.1-linux-ubuntu24.tar.gz | tar -xz
 chmod +x Server launch.sh
 ./launch.sh
 ```
@@ -40,7 +40,7 @@ chmod +x Server launch.sh
 ```bash
 mkdir -p MBQuIDE
 cd MBQuIDE
-curl -L https://github.com/mnm-team/mbquide/releases/latest/download/mbquide-v0.1.0-linux-ubuntu22.tar.gz | tar -xz
+curl -L https://github.com/mnm-team/mbquide/releases/latest/download/mbquide-v0.1.1-linux-ubuntu22.tar.gz | tar -xz
 chmod +x Server launch.sh
 ./launch.sh
 ```
@@ -49,7 +49,7 @@ chmod +x Server launch.sh
 ```bash
 mkdir -p MBQuIDE
 cd MBQuIDE
-curl -L https://github.com/mnm-team/mbquide/releases/latest/download/mbquide-v0.1.0-macos.tar.gz | tar -xz
+curl -L https://github.com/mnm-team/mbquide/releases/latest/download/mbquide-v0.1.1-macos.tar.gz | tar -xz
 chmod +x Server launch.sh
 ./launch.sh
 ```
@@ -63,9 +63,9 @@ chmod +x Server launch.sh
 
 Or via Command Prompt:
 ```cmd
-curl -L -o mbquide.zip https://github.com/mnm-team/mbquide/releases/latest/download/mbquide-v0.1.0-windows.zip
+curl -L -o mbquide.zip https://github.com/mnm-team/mbquide/releases/latest/download/mbquide-v0.1.1-windows.zip
 tar -xf mbquide.zip
-cd mbquide-v0.1.0-windows
+cd mbquide-v0.1.1-windows
 launch.bat
 ```
 

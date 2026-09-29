@@ -34,7 +34,7 @@ Linux (Ubuntu 24+)
 
    mkdir -p MBQuIDE
    cd MBQuIDE
-   curl -L https://github.com/mnm-team/mbquide/releases/latest/download/mbquide-v0.1.0-linux-ubuntu24.tar.gz | tar -xz
+   curl -L https://github.com/mnm-team/mbquide/releases/latest/download/mbquide-v0.1.1-linux-ubuntu24.tar.gz | tar -xz
    chmod +x Server launch.sh
    ./launch.sh
 
@@ -45,7 +45,7 @@ Linux (Ubuntu 22)
 
    mkdir -p MBQuIDE
    cd MBQuIDE
-   curl -L https://github.com/mnm-team/mbquide/releases/latest/download/mbquide-v0.1.0-linux-ubuntu22.tar.gz | tar -xz
+   curl -L https://github.com/mnm-team/mbquide/releases/latest/download/mbquide-v0.1.1-linux-ubuntu22.tar.gz | tar -xz
    chmod +x Server launch.sh
    ./launch.sh
 
@@ -56,7 +56,7 @@ macOS
 
    mkdir -p MBQuIDE
    cd MBQuIDE
-   curl -L https://github.com/mnm-team/mbquide/releases/latest/download/mbquide-v0.1.0-macos.tar.gz | tar -xz
+   curl -L https://github.com/mnm-team/mbquide/releases/latest/download/mbquide-v0.1.1-macos.tar.gz | tar -xz
    chmod +x Server launch.sh
    ./launch.sh
 
@@ -72,9 +72,9 @@ Or via Command Prompt:
 
 .. code-block:: bat
 
-   curl -L -o mbquide.zip https://github.com/mnm-team/mbquide/releases/latest/download/mbquide-v0.1.0-windows.zip
+   curl -L -o mbquide.zip https://github.com/mnm-team/mbquide/releases/latest/download/mbquide-v0.1.1-windows.zip
    tar -xf mbquide.zip
-   cd mbquide-v0.1.0-windows
+   cd mbquide-v0.1.1-windows
    launch.bat
 
 Once running — any platform — open your browser at:
