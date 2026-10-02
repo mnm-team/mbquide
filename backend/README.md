@@ -64,18 +64,31 @@ Converts the current MBQC graph into a ZX graph and returns its JSON representat
 | `"z-delete"` | `ids: int[]` | Z deletion on a list of nodes |
 | `"relabel"` | `node: int` | Relabel a node |
 | `"relabel-planar"` | `node: int`, `pref-basis?: string` | Planar relabelling, with optional preferred measurement basis |
+| `"yz-unfusion"` | `node: int`, `beta: number` | Splits `node`'s angle: `node` is reassigned angle `beta`, and a new `YZ`-measured pendant vertex is added with angle `beta - node`'s old angle |
 
-#### Automatically simplify the graph
+#### Automatically simplify the graph ("Reduce Nodes")
 ```json
 { "simplify": true }
 ```
-Iteratively applies graph rewrites to minimize the graph.
+Iteratively applies graph rewrites to remove non-input Clifford-angle measurements, minimizing vertex count.
 
-#### Compute focused Pauli flow
+#### Greedily reduce edges ("Reduce Edges")
+```json
+{ "optimizeEdges": true }
+```
+Iteratively applies local complementation and pivot (including on partial neighborhoods) to minimize the number of edges.
+
+#### Check whether edge reduction would do anything
+```json
+{ "checkOptimizeEdges": true }
+```
+Read-only: does **not** mutate the session's graph. Returns `{ "canOptimizeEdges": bool }`, reporting whether `optimizeEdges` would currently apply at least one rewrite. Intended for UI enablement checks (e.g. graying out the "Reduce Edges" button).
+
+#### Compute a Pauli flow
 ```json
 { "flow": "pauli" }
 ```
-Computes the Pauli flow for the current graph. Returns the graph JSON extended with a `"flow"` field, which looks like:
+Computes a Pauli flow for the current graph (not yet focused — see below). Returns the graph JSON extended with a `"flow"` field, which looks like:
 ```json
 "flow": {
     "ok": true,
@@ -84,6 +97,12 @@ Computes the Pauli flow for the current graph. Returns the graph JSON extended w
     "oddNcorrf": { "0": [2], "1": [] },
 }
 ```
+
+#### Focus the current flow
+```json
+{ "flow": "focus" }
+```
+Rewrites the session's already-computed flow in place into its *focused* form, where every correction set only ever references not-yet-measured vertices, so corrections can be applied eagerly as the simulator steps through measurements. Must be called after `{"flow": "pauli"}` (a no-op if no flow has been computed yet, or if it wasn't valid). Returns the graph JSON extended with the updated `"flow"` field, same shape as above.
 
 
 
@@ -170,6 +189,15 @@ backend/build/test/Tests
 ```
 
 **Run Benchmarks:**
+
+To reproduce every benchmark-derived figure in the paper's Evaluation section from scratch (Release build, all three benchmarks, all three plots, written into `paper/img/`):
 ```
-backend/build/test/Benchmarks
+backend/test/run_benchmarks.sh
 ```
+
+To run a single benchmark by hand instead (e.g. while iterating on one of them), build in Release mode first since these are timing-sensitive, and cap virtual memory so the dense backend's expected out-of-memory cases at larger sizes fail with a clean, fast `std::bad_alloc` instead of swap-thrashing the machine:
+```
+cmake -S backend -B backend/build -DCMAKE_BUILD_TYPE=Release && cmake --build backend/build --target Benchmarks
+bash -c 'ulimit -v 4000000; backend/build/test/Benchmarks --test-case="<name>"'
+```
+Each benchmark writes its raw per-repetition results to `backend/test/results/*.csv`; `backend/test/plot_*.py` turn those into the PDFs (see each script's `--help`).

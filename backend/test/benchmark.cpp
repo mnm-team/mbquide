@@ -19,6 +19,25 @@
 #include <string>
 #include <numeric>
 #include <cmath>
+#include <fstream>
+#include <filesystem>
+
+
+// =============================================
+// CSV output helpers
+// =============================================
+
+// Opens backend/test/results/<filename> for writing (creating the directory
+// if needed) and writes the given header as its first line. Run the
+// benchmark binary from the repository root (same requirement as
+// randomClifford()) so this relative path resolves correctly.
+inline std::ofstream openResultsCsv(const std::string& filename, const std::string& header) {
+    std::filesystem::path dir = "backend/test/results";
+    std::filesystem::create_directories(dir);
+    std::ofstream out(dir / filename);
+    out << header << "\n";
+    return out;
+}
 
 
 // =============================================
@@ -134,98 +153,109 @@ StageTiming benchmarkPipeline(
 
 TEST_CASE("Benchmark: Random Clifford - Conveyor Belt Comparison") {
 
+    // Matches the methodology described in the paper's Evaluation section
+    // (Figure 8): a single 5-qubit circuit family, circuit depth 5 to 150
+    // in steps of 5, averaged over 10 independently sampled circuits per
+    // depth, on the dense (state vector) backend. "Standard" = full
+    // initialization (conveyorBelt=false, every qubit allocated up front);
+    // "Conveyor belt" = the dynamic/partial initialization strategy of
+    // Section IV-E2 (conveyorBelt=true).
     const int REPS = 10;
+    const int nq = 5;
+    const int max_depth = 150;
+    const int depth_step = 5;
 
     auto makeZeroInput = [](int n) -> std::string {
         return "(1)|" + std::string(n, '0') + ">";
     };
 
-    std::vector<int> qubitSizes = {5, 10, 15};
-    int max_depth = 5;
-    int depth_step = 5;
+    std::ofstream csv = openResultsCsv(
+        "full_vs_partial.csv",
+        "depth,rep,nodes_after,full_us,full_ok,partial_us,partial_ok");
 
-    for (int nq : qubitSizes) {
+    std::cout << "\n============================================================\n";
+    std::cout << " Conveyor Belt comparison -- " << nq << " qubits\n";
+    std::cout << "============================================================\n\n";
 
-        std::cout << "\n============================================================\n";
-        std::cout << " Conveyor Belt comparison — " << nq << " qubits\n";
-        std::cout << "============================================================\n\n";
+    std::cout << std::left  << std::setw(18) << "Depth"
+              << std::setw(45) << "Standard pipeline"
+              << std::setw(45) << "Conveyor belt pipeline"
+              << "\n";
 
-        std::cout << std::left  << std::setw(18) << "Depth"
+    std::cout << std::left << std::setw(18) << " "
+              << std::right
+              << std::setw(10) << "Total us"
+              << std::setw(10) << "Nodes"
+              << "   |   "
+              << std::setw(10) << "Total us"
+              << std::setw(10) << "Nodes"
+              << "\n";
 
-                  << std::setw(45) << "Standard pipeline"
-                  << std::setw(45) << "Conveyor belt pipeline"
-                  << "\n";
+    std::cout << std::string(100, '-') << "\n";
 
-        std::cout << std::left << std::setw(18) << " "
-                  << std::right
-                  << std::setw(10) << "Total µs"
-                  << std::setw(10) << "Nodes"
-                  << std::setw(10) << "Reduce%"
-                  << "   |   "
-                  << std::setw(10) << "Total µs"
-                  << std::setw(10) << "Nodes"
-                  << std::setw(10) << "Reduce%"
-                  << "\n";
+    for (int depth = depth_step; depth <= max_depth; depth += depth_step) {
 
-        std::cout << std::string(100, '-') << "\n";
+        std::string input = makeZeroInput(nq);
 
-        for (int depth = depth_step; depth <= max_depth; depth += depth_step) {
+        double stdUsSum = 0.0, convUsSum = 0.0, nodesAfterSum = 0.0;
+        int stdOkCount = 0, convOkCount = 0, reps_done = 0;
 
-            std::string input = makeZeroInput(nq);
+        for (int rep = 0; rep < REPS; ++rep) {
+            std::string qasm = randomClifford(nq, depth, std::nullopt, std::nullopt, std::nullopt, 0.2);
+            if (qasm.empty()) continue;
 
-            StageTiming accStd, accConv;
-            GraphStats  statsStd, statsConv;
+            GraphStats gsStd, gsConv;
+            bool stdOk = true, convOk = true;
+            double stdUs = 0.0, convUs = 0.0;
 
-            for (int rep = 0; rep < REPS; ++rep) {
-                std::string qasm = randomClifford(nq, depth, std::nullopt, std::nullopt, std::nullopt, 0.2);
-
-                GraphStats  gsStd, gsConv;
-                StageTiming tStd  = benchmarkPipeline(qasm, input, gsStd,  true, 1, false);
-                StageTiming tConv = benchmarkPipeline(qasm, input, gsConv, true, 1, true);
-
-                // Accumulate
-                accStd.simulate_us  += tStd.simulate_us;
-                accConv.simulate_us += tConv.simulate_us;
-
-                statsStd.mbqc_nodes_after  += gsStd.mbqc_nodes_after;
-                statsConv.mbqc_nodes_after += gsConv.mbqc_nodes_after;
-                statsStd.mbqc_nodes_before  += gsStd.mbqc_nodes_before;
-                statsConv.mbqc_nodes_before += gsConv.mbqc_nodes_before;
+            // The paper reports that full initialization fails to complete
+            // starting around circuit depth 100 (excessive memory/runtime);
+            // catch that here instead of aborting the whole benchmark run.
+            try {
+                StageTiming tStd = benchmarkPipeline(qasm, input, gsStd, true, 1, false);
+                stdUs = tStd.simulate_us;
+            } catch (const std::exception& e) {
+                stdOk = false;
+                std::cerr << "  [standard failed] depth=" << depth << " rep=" << rep << ": " << e.what() << "\n";
             }
 
-            // Average
-            accStd.simulate_us  /= REPS;
-            accConv.simulate_us /= REPS;
+            try {
+                StageTiming tConv = benchmarkPipeline(qasm, input, gsConv, true, 1, true);
+                convUs = tConv.simulate_us;
+            } catch (const std::exception& e) {
+                convOk = false;
+                std::cerr << "  [conveyor belt failed] depth=" << depth << " rep=" << rep << ": " << e.what() << "\n";
+            }
 
-            statsStd.mbqc_nodes_after  /= REPS;
-            statsConv.mbqc_nodes_after /= REPS;
-            statsStd.mbqc_nodes_before  /= REPS;
-            statsConv.mbqc_nodes_before /= REPS;
+            double nodesAfter = convOk ? gsConv.mbqc_nodes_after : gsStd.mbqc_nodes_after;
 
-            double redStd = (statsStd.mbqc_nodes_before > 0)
-                ? 100.0 * (1.0 - (double)statsStd.mbqc_nodes_after / statsStd.mbqc_nodes_before)
-                : 0.0;
-            double redConv = (statsConv.mbqc_nodes_before > 0)
-                ? 100.0 * (1.0 - (double)statsConv.mbqc_nodes_after / statsConv.mbqc_nodes_before)
-                : 0.0;
+            csv << depth << "," << rep << "," << nodesAfter << ","
+                << stdUs << "," << (stdOk ? 1 : 0) << ","
+                << convUs << "," << (convOk ? 1 : 0) << "\n";
 
-
-            std::cout << std::left  << std::setw(18) << depth
-                      << std::right << std::fixed << std::setprecision(1)
-
-                      // Standard
-                      << std::setw(10) << accStd.simulate_us
-                      << std::setw(10) << statsStd.mbqc_nodes_after
-                      << std::setw(10) << redStd
-                      << "   |   "
-
-                      // Conveyor
-                      << std::setw(10) << accConv.simulate_us
-                      << std::setw(10) << statsConv.mbqc_nodes_after
-                      << std::setw(10) << redConv
-                      << "\n";
+            if (stdOk)  { stdUsSum  += stdUs;  stdOkCount++;  }
+            if (convOk) { convUsSum += convUs; convOkCount++; }
+            nodesAfterSum += nodesAfter;
+            ++reps_done;
         }
+
+        if (reps_done == 0) continue;
+        double nodesAfterAvg = nodesAfterSum / reps_done;
+        double stdUsAvg  = (stdOkCount  > 0) ? stdUsSum  / stdOkCount  : 0.0;
+        double convUsAvg = (convOkCount > 0) ? convUsSum / convOkCount : 0.0;
+
+        std::cout << std::left  << std::setw(18) << depth
+                  << std::right << std::fixed << std::setprecision(1)
+                  << std::setw(10) << stdUsAvg
+                  << std::setw(10) << nodesAfterAvg
+                  << "   |   "
+                  << std::setw(10) << convUsAvg
+                  << std::setw(10) << nodesAfterAvg
+                  << "\n";
     }
+
+    csv.close();
+    std::cout << "\nRaw per-repetition results written to backend/test/results/full_vs_partial.csv\n";
 
     CHECK(true);
 }
@@ -237,57 +267,146 @@ TEST_CASE("Benchmark: Random Clifford - Conveyor Belt Comparison") {
 
 TEST_CASE("Benchmark: Statevector vs TensorNetwork backend") {
 
-    const int REPS = 5;
+    const int REPS = 8;
 
     auto makeZeroInput = [](int n) -> std::string {
         return "(1)|" + std::string(n, '0') + ">";
     };
 
-    std::vector<int> qubitSizes = {4, 6, 8, 10};
-    int depth = 10;
+    // Paired (qubits, depth) grid, growing together so the resulting
+    // pattern's size, and with it the width of the entangled region the
+    // simulator has to hold at once, grows smoothly from trivial to large.
+    // Both backends run with the conveyor belt (dynamic allocation) enabled,
+    // so this is a fair comparison of the two backends' representation of
+    // the same activation schedule, not a repeat of the full-vs-partial
+    // initialization comparison in Figure 8. Denser steps through the
+    // 10-30 qubit range, where the crossover and the dense backend's
+    // eventual failure both happen; coarser beyond that, where the dense
+    // backend has already failed and the tensor-network backend is just
+    // continuing its own, much gentler, exponential climb.
+    std::vector<std::pair<int, int>> sizes = {
+        {4, 10}, {5, 12}, {6, 15}, {7, 17}, {8, 20}, {9, 22}, {10, 25},
+        {11, 27}, {12, 30}, {15, 40}, {18, 50}, {21, 60}, {24, 70},
+    };
+
+    std::ofstream csv = openResultsCsv(
+        "sv_vs_tn.csv",
+        "nq,depth,rep,nodes_after,edges_after,"
+        "sv_us,sv_ok,sv_peak_qubits,sv_peak_amplitudes,"
+        "tn_us,tn_ok,tn_peak_qubits,tn_peak_amplitudes");
 
     std::cout << "\n============================================================\n";
-    std::cout << " Statevector vs TensorNetwork backend — depth " << depth << "\n";
+    std::cout << " Statevector vs TensorNetwork backend\n";
     std::cout << "============================================================\n\n";
 
     std::cout << std::left  << std::setw(10) << "Qubits"
+              << std::setw(8)  << "Depth"
               << std::right
+              << std::setw(10) << "Nodes"
               << std::setw(16) << "Statevector us"
               << std::setw(16) << "TensorNet us"
               << std::setw(12) << "Speedup"
               << "\n";
-    std::cout << std::string(54, '-') << "\n";
+    std::cout << std::string(72, '-') << "\n";
 
-    for (int nq : qubitSizes) {
+    for (auto& [nq, depth] : sizes) {
 
         std::string input = makeZeroInput(nq);
 
-        double simUs = 0.0, tnUs = 0.0;
+        double simUsSum = 0.0, tnUsSum = 0.0, nodesAfterSum = 0.0;
+        int simOkCount = 0, tnOkCount = 0, reps_done = 0;
 
         for (int rep = 0; rep < REPS; ++rep) {
             std::string qasm = randomClifford(nq, depth, std::nullopt, std::nullopt, std::nullopt, 0.2);
+            if (qasm.empty()) continue;
 
-            GraphStats gsSv, gsTn;
-            StageTiming tSv = benchmarkPipeline(qasm, input, gsSv, true, 1, true, "statevector");
-            StageTiming tTn = benchmarkPipeline(qasm, input, gsTn, true, 1, true, "tensornetwork");
+            // Parsed, simplified and flow-found once and shared between both
+            // backends, so they run on exactly the same pattern.
+            QASMParser parser("", qasm);
+            QuantumCircuit circ = parser.parse();
+            ZXGraph zx = ZXGraph::fromQuantumCircuit(circ);
+            MBQC_Graph graph = ZXtoMBQCGraph(zx);
+            graph.simplify();
 
-            simUs += tSv.simulate_us;
-            tnUs  += tTn.simulate_us;
+            double nodesAfter = graph.getSize();
+            double edgesAfter = (int)graph.getAllEdges().size() / 2;
+
+            PauliFlowResult flow = findPauliFlow(graph);
+            if (!flow.ok) continue;
+
+            bool svOk = true, tnOk = true;
+            double svUs = 0.0, tnUs = 0.0;
+            long long svPeakQubits = 0, tnPeakQubits = 0;
+            long long svPeakAmps = 0, tnPeakAmps = 0;
+
+            // Runs one backend to completion by stepping manually (instead
+            // of simulateAll()) so we can sample its current qubit count and
+            // memory footprint (Simulator::getCurrentQubitCount()/
+            // getStoredAmplitudeCount() - cheap, no state copy) after every
+            // step and keep the running peak, i.e. the actual memory the
+            // backend held at its worst point during this run.
+            auto runTracked = [&](const std::string& backend, long long& peakQ, long long& peakAmp) -> double {
+                Simulator sim(graph, flow, true, input, 128, true, backend);
+                auto t0 = Clock::now();
+                while (!sim.isComplete()) {
+                    sim.step(*sim.getReadyNodes().begin());
+                    peakQ   = std::max(peakQ,   (long long)sim.getCurrentQubitCount());
+                    peakAmp = std::max(peakAmp, sim.getStoredAmplitudeCount());
+                }
+                auto t1 = Clock::now();
+                return (double)std::chrono::duration_cast<Micros>(t1 - t0).count();
+            };
+
+            // Dynamic allocation already keeps the backends' peak qubit
+            // count well below the full pattern size (see Section IV-E2 of
+            // the paper), but we still guard against the dense backend
+            // running out of memory on an unexpectedly wide pattern rather
+            // than aborting the whole benchmark run.
+            try {
+                svUs = runTracked("statevector", svPeakQubits, svPeakAmps);
+            } catch (const std::exception& e) {
+                svOk = false;
+                std::cerr << "  [sv failed] nq=" << nq << " depth=" << depth << " rep=" << rep << ": " << e.what() << "\n";
+            }
+
+            try {
+                tnUs = runTracked("tensornetwork", tnPeakQubits, tnPeakAmps);
+            } catch (const std::exception& e) {
+                tnOk = false;
+                std::cerr << "  [tn failed] nq=" << nq << " depth=" << depth << " rep=" << rep << ": " << e.what() << "\n";
+            }
+
+            csv << nq << "," << depth << "," << rep << ","
+                << nodesAfter << "," << edgesAfter << ","
+                << svUs << "," << (svOk ? 1 : 0) << "," << svPeakQubits << "," << svPeakAmps << ","
+                << tnUs << "," << (tnOk ? 1 : 0) << "," << tnPeakQubits << "," << tnPeakAmps << "\n";
+
+            if (svOk) { simUsSum += svUs; simOkCount++; }
+            if (tnOk) { tnUsSum  += tnUs; tnOkCount++;  }
+            nodesAfterSum += nodesAfter;
+            ++reps_done;
         }
 
-        simUs /= REPS;
-        tnUs  /= REPS;
+        if (reps_done == 0) continue;
+        double nodesAfter = nodesAfterSum / reps_done;
+        double simUs = (simOkCount > 0) ? simUsSum / simOkCount : 0.0;
+        double tnUs  = (tnOkCount  > 0) ? tnUsSum  / tnOkCount  : 0.0;
 
-        double speedup = (tnUs > 0.0) ? (simUs / tnUs) : 0.0;
+        double speedup = (tnUs > 0.0 && simOkCount > 0) ? (simUs / tnUs) : 0.0;
 
         std::cout << std::left  << std::setw(10) << nq
+                  << std::setw(8)  << depth
                   << std::right << std::fixed << std::setprecision(1)
+                  << std::setw(10) << nodesAfter
                   << std::setw(16) << simUs
                   << std::setw(16) << tnUs
                   << std::setprecision(2)
                   << std::setw(11) << speedup << "x"
                   << "\n";
     }
+
+    csv.close();
+    std::cout << "\nRaw per-repetition results written to backend/test/results/sv_vs_tn.csv\n";
 
     CHECK(true);
 }
@@ -299,10 +418,17 @@ TEST_CASE("Benchmark: Statevector vs TensorNetwork backend") {
 
 TEST_CASE("Benchmark: simplify vs greedyOptimizeEdges") {
 
-    const int REPS = 5;
+    const int REPS = 8;
 
+    // {28, 70} was tried and consistently threw std::bad_alloc even on the
+    // tensor-network backend on a 14GB machine (under the 4GB ulimit used
+    // for these runs), so the grid stops at {24, 60}, the largest size that
+    // completes reliably. 12 points (not 10) so plot_node_vs_edge_reduction.py's
+    // 3 size bins divide evenly: 4 grid points x REPS=8 = 32 repetitions
+    // per bin, exactly, instead of an uneven 24/24/32 split.
     std::vector<std::pair<int, int>> sizes = {
-        {4, 10}, {6, 15}, {8, 20},{10, 25},{12, 30}, {14, 35}, {16, 40}, {18, 45}, {20, 50}, 
+        {4, 10}, {6, 15}, {8, 20}, {9, 22}, {10, 25}, {12, 30}, {14, 35},
+        {16, 40}, {18, 45}, {20, 50}, {22, 55}, {24, 60},
     };
 
     // A planar (XY/XZ/YZ) node whose angle is not a multiple of pi/2 is non-Clifford.
@@ -325,6 +451,12 @@ TEST_CASE("Benchmark: simplify vs greedyOptimizeEdges") {
     auto makeZeroInput = [](int n) -> std::string {
         return "(1)|" + std::string(n, '0') + ">";
     };
+
+    std::ofstream csv = openResultsCsv(
+        "node_vs_edge_reduction.csv",
+        "nq,depth,rep,nodes_before,nonclifford_before,"
+        "simp_nodes_after,simp_edges_after,simp_us,simp_sim_us,"
+        "edge_nodes_after,edge_edges_after,edge_us,edge_sim_us");
 
     std::cout << "\n============================================================\n";
     std::cout << " simplify() vs greedyOptimizeEdges() -- simplify+simulate total\n";
@@ -389,8 +521,15 @@ TEST_CASE("Benchmark: simplify vs greedyOptimizeEdges") {
 
             PauliFlowResult flowA = findPauliFlow(gSimplify);
             if (flowA.ok) {
-                Simulator simA(gSimplify, flowA, true, inputState, 128, true, "tensornetwork");
-                simA.simulateAll();
+                // Even the tensor-network backend can run out of memory on
+                // an unusually dense random circuit at the larger grid
+                // sizes; catch that rather than aborting the whole run.
+                try {
+                    Simulator simA(gSimplify, flowA, true, inputState, 128, true, "tensornetwork");
+                    simA.simulateAll();
+                } catch (const std::exception& e) {
+                    std::cerr << "  [simplify-path sim failed] nq=" << nq << " depth=" << depth << " rep=" << rep << ": " << e.what() << "\n";
+                }
             }
             auto t2 = Clock::now();
 
@@ -405,16 +544,31 @@ TEST_CASE("Benchmark: simplify vs greedyOptimizeEdges") {
 
             PauliFlowResult flowB = findPauliFlow(gEdges);
             if (flowB.ok) {
-                Simulator simB(gEdges, flowB, true, inputState, 128, true, "tensornetwork");
-                simB.simulateAll();
+                try {
+                    Simulator simB(gEdges, flowB, true, inputState, 128, true, "tensornetwork");
+                    simB.simulateAll();
+                } catch (const std::exception& e) {
+                    std::cerr << "  [edges-path sim failed] nq=" << nq << " depth=" << depth << " rep=" << rep << ": " << e.what() << "\n";
+                }
             }
             auto t5 = Clock::now();
 
-            simplifyUs  += std::chrono::duration_cast<Micros>(t1 - t0).count();
-            simulateUsA += std::chrono::duration_cast<Micros>(t2 - t1).count(); // flow + simulate
+            double repSimplifyUs = std::chrono::duration_cast<Micros>(t1 - t0).count();
+            double repSimUsA     = std::chrono::duration_cast<Micros>(t2 - t1).count(); // flow + simulate
+            double repEdgesUs    = std::chrono::duration_cast<Micros>(t4 - t3).count();
+            double repSimUsB     = std::chrono::duration_cast<Micros>(t5 - t4).count(); // flow + simulate
 
-            edgesUs     += std::chrono::duration_cast<Micros>(t4 - t3).count();
-            simulateUsB += std::chrono::duration_cast<Micros>(t5 - t4).count(); // flow + simulate
+            simplifyUs  += repSimplifyUs;
+            simulateUsA += repSimUsA;
+            edgesUs     += repEdgesUs;
+            simulateUsB += repSimUsB;
+
+            csv << nq << "," << depth << "," << rep << ","
+                << baseGraph.getSize() << "," << countNonClifford(baseGraph) << ","
+                << gSimplify.getSize() << "," << (int)(gSimplify.getAllEdges().size() / 2) << ","
+                << repSimplifyUs << "," << repSimUsA << ","
+                << gEdges.getSize() << "," << (int)(gEdges.getAllEdges().size() / 2) << ","
+                << repEdgesUs << "," << repSimUsB << "\n";
 
             ++reps_done;
         }
@@ -455,6 +609,9 @@ TEST_CASE("Benchmark: simplify vs greedyOptimizeEdges") {
                   << std::setw(10) << speedup << "x"
                   << "\n";
     }
+
+    csv.close();
+    std::cout << "\nRaw per-repetition results written to backend/test/results/node_vs_edge_reduction.csv\n";
 
     CHECK(true);
 }

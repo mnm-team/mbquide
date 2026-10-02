@@ -5,6 +5,7 @@
 #include <unordered_set>
 #include <set>
 #include <variant>
+#include <type_traits>
 #include <algorithm>
 #include <iostream>
 #include <nlohmann/json.hpp>
@@ -62,6 +63,24 @@ public:
     /// The active backend's current qubit count.
     int get_num_qubits() const {
         return std::visit([](auto& s) { return s.get_num_qubits(); }, impl);
+    }
+
+    /// The active backend's current memory footprint, in number of complex
+    /// amplitudes: `2^num_qubits` for the dense backend (every amplitude is
+    /// stored explicitly), or TensorNetworkSimulator::getStoredAmplitudeCount()
+    /// for the other (the sum of its MPS blocks' actual site-tensor sizes).
+    /// Cheap - reads existing state, never copies it, so it's safe to call
+    /// after every step() to track a simulation's peak memory use.
+    long long getStoredAmplitudeCount() const {
+        return std::visit([](auto& s) -> long long {
+            using T = std::decay_t<decltype(s)>;
+            if constexpr (std::is_same_v<T, StatevectorSimulator>) {
+                int q = s.get_num_qubits();
+                return (q > 0) ? (1LL << q) : 1;
+            } else {
+                return s.getStoredAmplitudeCount();
+            }
+        }, impl);
     }
 
     /// Appends a new `|+>` qubit on the active backend; see StatevectorSimulator::add_qubit_plus()/TensorNetworkSimulator::add_qubit_plus().
@@ -434,6 +453,16 @@ public:
     /// Which SimulatorBackendType this simulator is using.
     SimulatorBackendType getBackendType() const {
         return backendType;
+    }
+
+    /// The active backend's current qubit count (see SimulatorBackendHandle::get_num_qubits() - cheap, no state copy).
+    int getCurrentQubitCount() const {
+        return backendSim.get_num_qubits();
+    }
+
+    /// The active backend's current memory footprint, in number of complex amplitudes (see SimulatorBackendHandle::getStoredAmplitudeCount() - cheap, no state copy).
+    long long getStoredAmplitudeCount() const {
+        return backendSim.getStoredAmplitudeCount();
     }
 
     /// Serializes the simulator's full state for the REST API: the graph, flow, ready/measured node sets, measurement outcomes, active edges/nodes, and (if small enough — see `maxVecSizeJSON`) the current statevector.

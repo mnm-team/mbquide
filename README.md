@@ -18,6 +18,9 @@
     <img src="https://img.shields.io/github/license/mnm-team/mbquide" alt="License">
   </a>
   <img src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-blue?style=flat-square" alt="Platform">
+  <a href="https://mbquide.readthedocs.io/en/latest/?badge=latest">
+    <img src="https://readthedocs.org/projects/mbquide/badge/?version=latest" alt="Documentation Status">
+  </a>
 </p>
 
 ---
@@ -85,7 +88,7 @@ Follow these steps if you want to build MBQuIDE yourself.
 
 **Backend (C++)**
 - CMake ≥ 3.14
-- A C++17-compatible compiler (e.g. GCC 9+, Clang 10+, MSVC 2019+)
+- A C++20-compatible compiler (e.g. GCC 11+, Clang 12+, MSVC 2019 16.8+)
 - [Boost Graph library](https://www.boost.org/doc/libs/latest/libs/graph/doc/).
 
 **Frontend (Web UI)**
@@ -139,6 +142,11 @@ Open `http://localhost:5173` in your browser to use the app.
 MBQuIDE/
 ├── backend/       # C++ backend server
 ├── frontend/      # Web-based UI (React)
+├── docs/          # Sphinx/Doxygen sources for mbquide.readthedocs.io
 └── README.md
 ```
+
+## Documentation
+
+Full API and backend reference documentation is available at [mbquide.readthedocs.io](https://mbquide.readthedocs.io).
 
